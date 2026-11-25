@@ -13,7 +13,7 @@
 
   // Pages allowed to talk to the extension: local development and the official site.
   // Self-hosting? Add your exact origin here (never a wildcard domain).
-  const APP_ORIGINS = [/^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+)?$/, /^https:\/\/nishkam-b\.github\.io$/];
+  const APP_ORIGINS = [/^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+)?$/, /^https:\/\/nishtek\.in$/];
   const FROM_APP = "capturekit:app";
   const FROM_EXT = "capturekit:ext";
   const VERSION = chrome.runtime.getManifest().version;

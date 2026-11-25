@@ -4,7 +4,7 @@
 Record your screen with your webcam and voice, add smart zoom and cursor effects, annotate, and export.
 No account, no uploads, no subscription: everything stays on your device.
 
-**Try it:** [nishkam-b.github.io/capturekit](https://nishkam-b.github.io/capturekit/) (Chrome or Edge on a desktop computer)
+**Try it:** [nishtek.in/capturekit](https://nishtek.in/capturekit/) (Chrome or Edge on a desktop computer)
 
 ![CaptureKit video editor](docs/images/editor.jpg)
 

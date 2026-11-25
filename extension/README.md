@@ -25,7 +25,7 @@ you're recording**. CaptureKit uses them for cursor effects and automatic smart 
 - Events go **only** to the CaptureKit tab, through the extension. Nothing is sent to any server,
   and nothing is stored by the extension.
 - It only talks to CaptureKit pages on allow-listed origins (currently `localhost` and
-  `127.0.0.1`, plus the official site `https://nishkam-b.github.io`; edit `APP_ORIGINS` in `content.js` for
+  `127.0.0.1`, plus the official site `https://nishtek.in`; edit `APP_ORIGINS` in `content.js` for
   your own deployment).
 
 ## Permissions
