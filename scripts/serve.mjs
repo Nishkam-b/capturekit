@@ -66,11 +66,21 @@ createServer(async (req, res) => {
       }
     }
     const status = file ? 200 : 404;
-    file ??= path.join(root, "404.html");
+    if (!file) {
+      const notFound = path.join(root, "404.html");
+      if (!(await isFile(notFound))) {
+        // No build yet (or no 404 page): answer plainly instead of crashing.
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found. Run `npm run build` first?");
+        return;
+      }
+      file = notFound;
+    }
     const type = TYPES[path.extname(file)] ?? "application/octet-stream";
     const cache = file.includes(`${path.sep}_next${path.sep}static${path.sep}`) ? "public, max-age=31536000, immutable" : "no-cache";
     res.writeHead(status, { "Content-Type": type, "Cache-Control": cache, "X-Content-Type-Options": "nosniff" });
-    createReadStream(file).pipe(res);
+    const stream = createReadStream(file);
+    stream.on("error", () => res.destroy());
+    stream.pipe(res);
   } catch {
     res.writeHead(500).end();
   }
