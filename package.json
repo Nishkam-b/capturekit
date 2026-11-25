@@ -29,7 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "description": "Free, open-source screen recorder, video editor and screenshot editor that runs in your browser. Recordings never leave your device.",
   "license": "MIT",
