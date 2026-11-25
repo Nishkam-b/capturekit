@@ -672,8 +672,8 @@ function ZoomPanel(p: PanelProps) {
             ? estimated
               ? "Based on screen activity (estimated): this recording has no visible cursor, so zooms go where dialogs, menus and typing appear."
               : fromCursor
-                ? "Based on your cursor: zooms in as you move to each click (fully in before you click), follows the cursor, and zooms out when you're done."
-                : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and follows the cursor."
+                ? "Based on your cursor: zooms in as you move to each click (fully in before you click), holds steady on that spot, and zooms out after."
+                : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and holds steady on that spot."
             : undefined
         }
       >

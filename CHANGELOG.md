@@ -2,6 +2,17 @@
 
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.1] — 2026-11-25 — Steady zooms
+
+### Changed
+- **Automatic zooms hold the view still** on the click area instead of following the cursor: zoom in before the
+  click, stay on that spot, zoom out after. Clicks in the same area close together share one zoom; clicks in a
+  different place get their own zoom, and zooms never overlap.
+- Manual zooms (Z) and "Zoom in here" marks are also steady, placed on the cursor's spot when it's known.
+  "Follow cursor" is still available per zoom in the Zoom panel.
+- Projects from earlier versions get their automatic zooms regenerated with these rules when opened (manual and
+  deleted zooms are kept).
+
 ## [0.11.0] — 2026-11-25 — Click-based auto zoom from the video, finished video after recording
 
 ### Added

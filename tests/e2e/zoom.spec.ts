@@ -67,8 +67,8 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await waitSaved(page);
   let z = (await storedZoom(page))!;
   expect(z.segments).toHaveLength(1);
-  // Manual zooms follow the pointer when there is pointer data, otherwise they stay on a fixed point.
-  expect(z.segments[0]).toMatchObject({ level: 2, mode: cursorFound ? "follow" : "fixed", auto: false });
+  // Manual zooms hold a steady view (on the cursor's spot when it's known).
+  expect(z.segments[0]).toMatchObject({ level: 2, mode: "fixed", auto: false });
   const seg = z.segments[0];
   expect(seg.end - seg.start).toBeGreaterThan(1000);
 
@@ -78,7 +78,6 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   expect(zoomed).not.toBe(before);
 
   // Pick a focus point in the top-left of the preview (fixed-point zooms only).
-  if (cursorFound) await page.getByRole("radio", { name: /Fixed point/ }).click();
   const canvas = (await page.getByTestId("editor-canvas").boundingBox())!;
   await expect(page.getByText(/Click the preview to choose where to zoom/)).toBeVisible();
   await page.mouse.click(canvas.x + canvas.width * 0.2, canvas.y + canvas.height * 0.25);

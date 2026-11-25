@@ -62,7 +62,7 @@ in real time (a 5-minute video takes about 5 minutes) and pauses if you switch t
 
 When you stop recording, the editor opens and finds your mouse pointer in the video ("Finding your cursor and
 clicks…"). A click is the cursor arriving somewhere, stopping, and the screen reacting next to it. Each zoom starts as
-you move toward the click, is fully in before you click, follows the cursor and zooms out afterwards; nearby clicks
+you move toward the click, is fully in before you click, holds the view steady on that spot and zooms out afterwards; nearby clicks
 share one zoom. Record the **entire screen** or a **window** for this (browser-tab recordings don't contain the
 pointer, so zooms there follow on-screen changes). Turn it off in the Zoom panel or edit any zoom.
 

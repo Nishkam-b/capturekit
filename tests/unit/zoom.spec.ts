@@ -28,16 +28,35 @@ test.describe("auto zoom detection", () => {
   test("a click zooms in before it and holds after it", () => {
     const segs = detectZoomSegments([...wander(0, 4000), ...click(5000, 0.2, 0.3)], opts);
     expect(segs).toHaveLength(1);
-    expect(segs[0]).toMatchObject({ start: 4050, end: 6500, level: 2, mode: "follow", auto: true });
+    expect(segs[0]).toMatchObject({ start: 4050, end: 6500, level: 2, mode: "fixed", auto: true });
     expect(segs[0].x).toBeCloseTo(0.2);
   });
 
-  test("clicks close in time become one zoom; far apart become separate zooms", () => {
-    const near = detectZoomSegments([...click(5000, 0.2, 0.2), ...click(6500, 0.8, 0.8), ...click(8000, 0.5, 0.5)], opts);
-    expect(near).toHaveLength(1);
-    expect(near[0].end).toBe(9500);
+  test("clicks close in time and place share one zoom; other places or times get their own", () => {
+    const same = detectZoomSegments([...click(5000, 0.2, 0.2), ...click(6500, 0.25, 0.22), ...click(8000, 0.22, 0.28)], opts);
+    expect(same).toHaveLength(1);
+    expect(same[0].end).toBe(9500);
+    const elsewhere = detectZoomSegments([...click(5000, 0.2, 0.2), ...click(6500, 0.8, 0.8)], opts);
+    expect(elsewhere).toHaveLength(2);
+    expect(elsewhere[0].x).toBeCloseTo(0.2);
+    expect(elsewhere[1].x).toBeCloseTo(0.8);
+    // they never overlap: the first ends where the second begins
+    expect(elsewhere[0].end).toBeLessThanOrEqual(elsewhere[1].start);
     const far = detectZoomSegments([...click(5000, 0.2, 0.2), ...click(20_000, 0.8, 0.8)], opts);
     expect(far).toHaveLength(2);
+  });
+
+  test("an automatic zoom holds the view still on the click area while the cursor moves", () => {
+    const events = [...wander(0, 9000), ...click(5000, 0.3, 0.4)];
+    const [seg] = detectZoomSegments(events, opts);
+    const path = buildCursorPath(events, 0.8)!;
+    const a = zoomAt([seg], 700, 5200, path);
+    const b = zoomAt([seg], 700, 6200, path);
+    expect(a.scale).toBeCloseTo(2);
+    expect(a.cx).toBeCloseTo(0.3);
+    expect(a.cy).toBeCloseTo(0.4);
+    expect(b.cx).toBe(a.cx);
+    expect(b.cy).toBe(a.cy);
   });
 
   test("zooms with a short gap after zoom-out are merged (no quick out-and-in)", () => {

@@ -13,6 +13,8 @@ export interface DetectOptions {
 export const CLUSTER_GAP_MS = 3000;
 /** Zooms whose gaps are shorter than this are merged (no quick out-and-in). */
 export const MERGE_GAP_MS = 1500;
+/** Clicks within this distance (normalised) share one zoom: they fit in the same zoomed view. */
+export const SAME_AREA = 0.2;
 /** Fully zoomed in this long before the first click of a zoom (ms). */
 export const LEAD_MS = 250;
 /** The zoom never starts more than this before the click (ms). */
@@ -81,11 +83,13 @@ export function detectZoomSegments(events: readonly CursorEvent[], o: DetectOpti
   const points = findInteractions(events, o.onPauses);
   if (points.length === 0) return [];
 
-  // 1. Cluster by time.
+  // 1. Cluster by time AND place: clicks close together in the same area share one steady zoom.
   const clusters: Interaction[][] = [];
+  const centre = (c: Interaction[]) => ({ x: c.reduce((a, p) => a + p.x, 0) / c.length, y: c.reduce((a, p) => a + p.y, 0) / c.length });
   for (const p of points) {
     const last = clusters[clusters.length - 1];
-    if (last && p.t - last[last.length - 1].t <= CLUSTER_GAP_MS) last.push(p);
+    const near = last && Math.hypot(p.x - centre(last).x, p.y - centre(last).y) <= SAME_AREA;
+    if (last && near && p.t - last[last.length - 1].t <= CLUSTER_GAP_MS) last.push(p);
     else clusters.push([p]);
   }
 
@@ -103,13 +107,18 @@ export function detectZoomSegments(events: readonly CursorEvent[], o: DetectOpti
     };
   });
 
-  // 3. Merge zooms with short gaps (gap measured after the zoom-out finishes).
+  // 3. Merge zooms on the same area with short gaps (no quick out-and-in). Zooms on different areas stay
+  //    separate; if they'd overlap, the first one ends where the next begins (a smooth move between them).
   const merged: typeof segs = [];
   for (const s of segs) {
     const prev = merged[merged.length - 1];
-    if (prev && s.start - (prev.end + o.transitionMs) < MERGE_GAP_MS) {
+    const sameArea = prev && Math.hypot(s.x - prev.x, s.y - prev.y) <= SAME_AREA;
+    if (prev && sameArea && s.start - (prev.end + o.transitionMs) < MERGE_GAP_MS) {
       prev.end = Math.max(prev.end, s.end);
-    } else merged.push({ ...s });
+    } else {
+      if (prev && s.start < prev.end) prev.end = Math.max(prev.start + o.transitionMs, s.start);
+      merged.push({ ...s });
+    }
   }
   segs = merged.filter((s) => s.end > s.start);
 
@@ -119,7 +128,8 @@ export function detectZoomSegments(events: readonly CursorEvent[], o: DetectOpti
     start: Math.round(s.start),
     end: Math.round(s.end),
     level: o.level,
-    mode: "follow" as const,
+    // Steady on the click area: the view doesn't chase the cursor.
+    mode: "fixed" as const,
     x: s.x,
     y: s.y,
     auto: true,

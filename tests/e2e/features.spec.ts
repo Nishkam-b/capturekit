@@ -290,7 +290,7 @@ test("auto zoom finds the cursor and click in a real encoded video and zooms in 
   const id = new URL(page.url()).searchParams.get("id");
   const seg = await page.evaluate(
     (rid) =>
-      new Promise<{ start: number; end: number; x: number; y: number }>((resolve, reject) => {
+      new Promise<{ start: number; end: number; x: number; y: number; mode: string }>((resolve, reject) => {
         const req = indexedDB.open("capturekit");
         req.onsuccess = () => {
           const g = req.result.transaction("projects").objectStore("projects").get(rid!);
@@ -303,6 +303,10 @@ test("auto zoom finds the cursor and click in a real encoded video and zooms in 
   expect(seg.start + 700).toBeLessThanOrEqual(1950);
   expect(seg.start).toBeGreaterThan(0);
   expect(seg.end).toBeGreaterThan(2500);
+  // Steady on the click spot (the button at ~830, 395 of 1280×720), not following the cursor.
+  expect((seg as { mode?: string }).mode).toBe("fixed");
+  expect(seg.x).toBeCloseTo(830 / 1280, 1);
+  expect(seg.y).toBeCloseTo(395 / 720, 1);
   // Cursor panel: no extension prompt; the cursor was found in the video.
   await page.getByRole("button", { name: "Cursor", exact: true }).click();
   await expect(page.getByText(/Found in your video/)).toBeVisible();

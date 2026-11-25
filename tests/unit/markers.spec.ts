@@ -5,7 +5,7 @@ test.describe("zoom markers", () => {
   test("each mark becomes a manual zoom starting just before it", () => {
     const s = markerSegments([5000, 20000], 60000);
     expect(s).toHaveLength(2);
-    expect(s[0]).toMatchObject({ start: 4700, end: 5000 + MARKER_HOLD_MS, auto: false, mode: "follow", level: 2 });
+    expect(s[0]).toMatchObject({ start: 4700, end: 5000 + MARKER_HOLD_MS, auto: false, mode: "fixed", level: 2 });
     expect(s[1].start).toBe(19700);
   });
 

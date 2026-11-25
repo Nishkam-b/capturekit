@@ -12,7 +12,7 @@ import { computeWaveform, generateFilmstrip, type FilmFrame, type Waveform } fro
 import type { PreviewPlayer, PlayerSnapshot } from "@/engines/editor/player";
 import { buildCursorPath, pressedRanges, type CursorBundle } from "@/engines/cursor/path";
 import { withAutoSegments } from "@/engines/zoom/detect";
-import { markerSegments } from "@/engines/zoom/markers";
+import { markerSegments, placeMarkers, pointerAt } from "@/engines/zoom/markers";
 import { setAnnotationFont } from "@/engines/annotations/render";
 import { KIND_LABEL, createAnnotation, type Annotation, type AnnotationKind } from "@/engines/annotations/types";
 import type { WebcamStyle } from "@/engines/editor/webcam";
@@ -74,7 +74,7 @@ export function Editor() {
           meta,
           screen,
           camera,
-          project: saved ? normalizeProject(saved) : initialProject(meta, cursorTrack ? unpackEvents(cursorTrack.events) : []),
+          project: saved ? refreshAutoZooms(normalizeProject(saved), cursorTrack ? unpackEvents(cursorTrack.events) : []) : initialProject(meta, cursorTrack ? unpackEvents(cursorTrack.events) : []),
           cursorEvents: cursorTrack ? unpackEvents(cursorTrack.events) : [],
           telemetrySource: cursorTrack?.source ?? null,
         });
@@ -193,7 +193,10 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           (p) => ({
             ...p,
             cursor: method === "cursor" ? { ...p.cursor, show: false } : p.cursor,
-            zoom: p.zoom.auto && events.length ? withAutoSegments(p.zoom, events, p.sourceDurationMs) : p.zoom,
+            zoom: (() => {
+              const z = method === "cursor" ? { ...p.zoom, segments: placeMarkers(p.zoom.segments, events) } : p.zoom;
+              return z.auto && events.length ? withAutoSegments(z, events, p.sourceDurationMs) : z;
+            })(),
           }),
           { transient: true },
         );
@@ -361,16 +364,16 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
       start: Math.round(at),
       end: Math.round(Math.min(project.sourceDurationMs, at + 2500)),
       level: project.zoom.level,
-      // Follow the pointer only with precise cursor data; estimated activity is too jumpy for a hand-placed zoom.
-      mode: cursorEvents.length ? "follow" : "fixed",
-      x: 0.5,
-      y: 0.5,
+      // A steady view on where the cursor is (or the centre); choose "Follow cursor" in the Zoom panel to track it instead.
+      mode: "fixed",
+      x: pointerAt(cursorEvents, at)?.x ?? 0.5,
+      y: pointerAt(cursorEvents, at)?.y ?? 0.5,
       auto: false,
     };
     updateZoom({ segments: [...project.zoom.segments, seg].sort((a, b) => a.start - b.start) });
     setSelectedZoomId(id);
     setTool("zoom");
-  }, [project.clips, project.sourceDurationMs, project.zoom, snap.timeMs, cursorEvents.length, updateZoom]);
+  }, [project.clips, project.sourceDurationMs, project.zoom, snap.timeMs, cursorEvents, updateZoom]);
 
   /** Edits a segment. Editing an auto zoom makes it manual, so regenerating never overwrites it. */
   const editZoom = useCallback(
@@ -868,4 +871,10 @@ function ReadyBanner(p: {
       </button>
     </div>
   );
+}
+
+/** Older projects: re-detect automatic zooms with the current rules (manual and dismissed zooms are kept). */
+function refreshAutoZooms(p: EditProject, events: CursorEvent[]): EditProject {
+  if (!p.zoom.auto || !events.length) return p;
+  return { ...p, zoom: withAutoSegments(p.zoom, events, p.sourceDurationMs) };
 }

@@ -35,7 +35,7 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
         Screen and window recordings include your mouse pointer, so after recording {site.name} finds the cursor in the
         video on your device. A click is when the cursor arrives somewhere, stops, and the screen reacts right next to it
         (a menu opens, a dialog appears, a page changes). Each zoom starts as you move toward the click, is fully in before
-        you click, follows the cursor, and zooms out when you&apos;re done. Clicks close together share one zoom. You can
+        you click, holds the view steady on that spot, and zooms out when you&apos;re done. Clicks close together in the same area share one zoom. You can
         move, resize, add or delete any zoom. Browser-tab recordings don&apos;t include the pointer, so there zooms follow
         on-screen changes instead.
       </>

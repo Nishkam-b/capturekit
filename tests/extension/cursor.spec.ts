@@ -153,7 +153,7 @@ async function storedZoomSegments(page: Page): Promise<Array<{ auto: boolean; mo
   );
 }
 
-test("auto zoom: clicks create follow zooms; toggling, deleting and regenerating behave", async () => {
+test("auto zoom: clicks create steady zooms; toggling, deleting and regenerating behave", async () => {
   // Own browser profile: fake-UI capture can pick a leftover tab from earlier tests.
   const own = await mkdtemp(path.join(os.tmpdir(), "ck-ext-zoom-"));
   const zctx = await chromium.launchPersistentContext(own, {
@@ -201,7 +201,7 @@ test("auto zoom: clicks create follow zooms; toggling, deleting and regenerating
   await app.waitForTimeout(700);
   const segs = await storedZoomSegments(app);
   expect(segs).toHaveLength(1);
-  expect(segs[0]).toMatchObject({ auto: true, mode: "follow" });
+  expect(segs[0]).toMatchObject({ auto: true, mode: "fixed" });
 
   // Deleting an auto zoom keeps it deleted when settings change (regeneration).
   await app.getByTestId("zoom-0").click();

@@ -31,7 +31,7 @@ No account, no uploads, no subscription: everything stays on your device.
 - Webcam overlay anywhere: circle / rounded / rectangle, roundness, margin, border, shadow, mirror, and it
   **shrinks while zoomed in**
 - **Automatic zoom on your clicks, no setup:** the editor finds your mouse pointer in the screen recording, works out
-  where you clicked, and zooms in as you approach each click, follows the cursor, and zooms out after. Plus manual zooms.
+  where you clicked, and zooms in on each click area as you approach it, holds the view steady, and zooms out after. Plus manual zooms.
 - **Finished video right after recording:** the editor opens with zooms, background and framing applied, ready to export
 - **Cursor effects:** cursor (dark, light or dot), smoothing, highlight, click ripple, click bounce, motion blur,
   sway (via the optional extension)

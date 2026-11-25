@@ -111,7 +111,7 @@ export default function HelpPage() {
             A <b className="text-ink">click</b> is the cursor arriving somewhere, stopping, and the screen reacting right next to it
             (a menu, a dialog, a new page).
           </li>
-          <li>Each zoom starts while you move toward the click, is fully in before you click, follows the cursor, and zooms out after.</li>
+          <li>Each zoom starts while you move toward the click, is fully in before you click, holds the view steady on that spot (it doesn&apos;t chase the cursor), and zooms out after.</li>
           <li>Clicks close together share one zoom, so the video doesn&apos;t bounce in and out.</li>
           <li>Browser-tab recordings have no pointer in the video, so zooms follow on-screen changes there.</li>
         </ul>

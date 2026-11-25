@@ -6,7 +6,7 @@ export const site = {
   /** Set once the public repository exists. Links are hidden while null. */
   githubUrl: "https://github.com/Nishkam-b/capturekit" as string | null,
   instagram: { handle: "nishkambhatia", url: "https://www.instagram.com/nishkambhatia/" },
-  version: "0.11.0",
+  version: "0.11.1",
 };
 
 /** Base path the site is served under ("" locally, "/capturekit" on GitHub Pages). */
