@@ -31,7 +31,8 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Explicit props (not Next's generated `LayoutProps`), so `tsc` works on a fresh checkout before any build.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <head>{process.env.NODE_ENV === "production" && <meta httpEquiv="Content-Security-Policy" content={CSP} />}</head>
