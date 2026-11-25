@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* CaptureKit design tokens — from the UI design sheet. */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #10b981;
+  --color-primary-hover: #059669;
+  --color-primary-strong: #047857;
+  --color-primary-light: #d1fae5;
+  --color-primary-surface: #f0fdf4;
+
+  --color-canvas: #ffffff;
+  --color-subtle: #f8fafc;
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-faint: #94a3b8;
+
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-warn: #b45309;
+  --color-warn-light: #fef3c7;
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-chip: 8px;
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.04);
+  --shadow-float: 0 10px 30px -10px rgb(15 23 42 / 0.25);
+}
+
+html,
+body {
+  background: var(--color-subtle);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes ck-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.ck-pulse {
+  animation: ck-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ck-pulse {
+    animation: none;
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "capturekit",
+  "version": "0.8.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build && node scripts/fix-export.mjs",
+    "start": "node scripts/serve.mjs --port 3000",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "playwright test --project=unit",
+    "test:e2e": "playwright test --project=e2e --project=e2e-edge",
+    "test": "playwright test --project=unit --project=e2e --project=e2e-edge --project=e2e-extension",
+    "test:firefox": "playwright test --project=e2e-firefox",
+    "test:extension": "playwright test --project=e2e-extension"
+  },
+  "dependencies": {
+    "lucide-react": "^1.79.0",
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5"
+  },
+  "description": "Free, open-source screen recorder, video editor and screenshot editor that runs in your browser. Recordings never leave your device.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "screen-recorder",
+    "video-editor",
+    "screenshot",
+    "webrtc",
+    "mediarecorder",
+    "privacy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nishkam-b/capturekit.git"
+  },
+  "homepage": "https://nishkam-b.github.io/capturekit/",
+  "bugs": {
+    "url": "https://github.com/Nishkam-b/capturekit/issues"
+  }
+}

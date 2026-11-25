@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "CaptureKit Cursor Tracker",
+  "version": "0.2.0",
+  "description": "Records cursor movement and clicks in the browser tab you're recording with CaptureKit, for cursor effects and smart zoom. Data stays on your device.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't attach recordings that contain private information.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Record
+        2. Choose Browser tab, turn on the webcam
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options: [Chrome, Edge, Firefox, Safari, Other]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Browser version and operating system
+      placeholder: Chrome 142 on Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Recording, Video editor, Export, Cursor tracking / extension, Smart zoom, Annotations, Screenshot editor, Other]
+  - type: input
+    id: capturekit
+    attributes:
+      label: CaptureKit version
+      description: Shown at the bottom of the sidebar (e.g. v0.8.0)
