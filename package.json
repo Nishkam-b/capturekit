@@ -1,10 +1,11 @@
 {
   "name": "capturekit",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/build-extension.mjs",
     "dev": "next dev",
-    "build": "next build && node scripts/fix-export.mjs",
+    "build": "node scripts/build-extension.mjs && next build && node scripts/fix-export.mjs",
     "start": "node scripts/serve.mjs --port 3000",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

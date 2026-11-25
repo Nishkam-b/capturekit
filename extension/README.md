@@ -4,13 +4,20 @@ Optional companion for CaptureKit. Browsers don't tell web pages where your curs
 screen recording, so this extension records cursor positions and clicks in the **browser tab
 you're recording**. CaptureKit uses them for cursor effects and automatic smart zoom.
 
-## Install (developer mode, Chrome or Edge 116+)
+## Install (Chrome or Edge 116+)
 
-1. Open `chrome://extensions` (or `edge://extensions`).
-2. Turn on **Developer mode**.
-3. Click **Load unpacked** and choose this `extension/` folder.
-4. Reload any CaptureKit tab. The recording setup shows "Extension connected" when you pick
-   **Browser tab**.
+1. Download `capturekit-extension.zip` from the CaptureKit Help page and unzip it.
+2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
+3. Drag the unzipped `capturekit-extension` folder onto the page (or click **Load unpacked** and pick it), then
+   reload the CaptureKit tab. The recording setup shows "Extension connected" when you pick **Browser tab**.
+
+From source: `npm run build` (or `node scripts/build-extension.mjs`) writes the icons and
+`public/capturekit-extension.zip`; you can also load this `extension/` folder directly.
+
+## Shortcut
+
+**Alt+Shift+Z** ("Zoom in here") works from any Chrome tab while CaptureKit is recording. Change it at
+`chrome://extensions/shortcuts`.
 
 ## What it does, exactly
 
@@ -37,6 +44,7 @@ you're recording**. CaptureKit uses them for cursor effects and automatic smart 
 
 ## Limits
 
-- Browser tabs only. Screen and window recordings need the planned desktop companion.
+- Cursor tracking covers browser tabs only. Screen and window recordings already contain the system cursor, and
+  automatic zoom for them comes from on-device video analysis in the editor.
 - Pointer movement inside cross-origin iframes (embedded videos, some editors) isn't seen.
 - Chrome pages (`chrome://`, the Web Store) can't run extensions.

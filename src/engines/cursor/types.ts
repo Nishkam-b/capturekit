@@ -20,7 +20,8 @@ export interface CursorEvent {
   kind: CursorKind;
 }
 
-export type TelemetrySource = "extension" | "native";
+/** extension = precise pointer data; native = future desktop companion; video = estimated from on-screen activity. */
+export type TelemetrySource = "extension" | "native" | "video";
 
 export interface CursorTrack {
   recordingId: string;

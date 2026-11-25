@@ -3,7 +3,16 @@ import type { Clip } from "./project";
 /** Shortest clip we allow (ms). */
 export const MIN_CLIP_MS = 100;
 
-export const clipDuration = (c: Clip) => c.end - c.start;
+/** Speed of a clip (1 when unset). */
+export const clipSpeed = (c: Clip) => (c.speed && c.speed > 0 ? c.speed : 1);
+
+/** Output duration of a clip (ms): its source length divided by its speed. */
+export const clipDuration = (c: Clip) => (c.end - c.start) / clipSpeed(c);
+
+/** Output ms → source ms inside a clip. */
+const outToSrc = (c: Clip, outInClip: number) => c.start + outInClip * clipSpeed(c);
+/** Source ms → output ms from the clip's start. */
+const srcToOut = (c: Clip, sourceMs: number) => (sourceMs - c.start) / clipSpeed(c);
 
 export function totalDuration(clips: readonly Clip[]): number {
   return clips.reduce((sum, c) => sum + clipDuration(c), 0);
@@ -39,7 +48,7 @@ export function locate(clips: readonly Clip[], outMs: number): Location {
     const c = clips[i];
     const d = clipDuration(c);
     if (t < start + d || i === clips.length - 1) {
-      return { index: i, clip: c, sourceMs: c.start + Math.min(d, t - start), clipStartOut: start };
+      return { index: i, clip: c, sourceMs: Math.min(c.end, outToSrc(c, Math.min(d, t - start))), clipStartOut: start };
     }
     start += d;
   }
@@ -51,7 +60,7 @@ export function locate(clips: readonly Clip[], outMs: number): Location {
 export function toOutput(clips: readonly Clip[], index: number, sourceMs: number): number {
   const c = clips[index];
   const offset = clipOffsets(clips)[index] ?? 0;
-  return offset + Math.min(clipDuration(c), Math.max(0, sourceMs - c.start));
+  return offset + Math.min(clipDuration(c), Math.max(0, srcToOut(c, sourceMs)));
 }
 
 /** Splits the clip under `outMs` in two. No-op if too close to an edge. */
@@ -60,7 +69,7 @@ export function splitAt(clips: readonly Clip[], outMs: number, newId: string): C
   if (sourceMs - clip.start < MIN_CLIP_MS || clip.end - sourceMs < MIN_CLIP_MS) return [...clips];
   const at = Math.round(sourceMs);
   const next = [...clips];
-  next.splice(index, 1, { ...clip, end: at }, { id: newId, start: at, end: clip.end });
+  next.splice(index, 1, { ...clip, end: at }, { ...clip, id: newId, start: at });
   return next;
 }
 
@@ -98,7 +107,7 @@ export function isUntrimmed(clips: readonly Clip[], sourceDurationMs: number): b
 export function sourceToOutput(clips: readonly Clip[], sourceMs: number): number | null {
   let offset = 0;
   for (const c of clips) {
-    if (sourceMs >= c.start && sourceMs <= c.end) return offset + (sourceMs - c.start);
+    if (sourceMs >= c.start && sourceMs <= c.end) return offset + srcToOut(c, sourceMs);
     offset += clipDuration(c);
   }
   return null;
@@ -109,8 +118,14 @@ export function sourceToOutputClamped(clips: readonly Clip[], sourceMs: number):
   let offset = 0;
   for (const c of clips) {
     if (sourceMs < c.start) return offset;
-    if (sourceMs <= c.end) return offset + (sourceMs - c.start);
+    if (sourceMs <= c.end) return offset + srcToOut(c, sourceMs);
     offset += clipDuration(c);
   }
   return offset;
+}
+
+/** Sets the speed of one clip. */
+export function setClipSpeed(clips: readonly Clip[], id: string, speed: number): Clip[] {
+  const v = Math.min(16, Math.max(0.25, speed));
+  return clips.map((c) => (c.id === id ? (v === 1 ? { id: c.id, start: c.start, end: c.end } : { ...c, speed: v }) : c));
 }

@@ -19,7 +19,8 @@
   const VERSION = chrome.runtime.getManifest().version;
 
   // ---------------------------------------------------------------- bridge
-  if (APP_ORIGINS.some((r) => r.test(location.origin))) {
+  const isApp = APP_ORIGINS.some((r) => r.test(location.origin));
+  if (isApp) {
     let port = null;
     /** Last arm/track request, replayed if the background restarts (MV3 workers can be stopped). */
     let session = null;
@@ -136,6 +137,7 @@
       setHandle(null);
       setTracking(false);
     } else if (msg.type === "track") setTracking(!!msg.on);
+    else if (msg.type === "zoom-marker" && isApp) window.postMessage({ [FROM_EXT]: true, type: "zoom-marker" }, location.origin);
   });
 
   // After a navigation in a tab that's being recorded, resume tracking.

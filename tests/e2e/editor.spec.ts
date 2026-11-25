@@ -95,8 +95,9 @@ test("editor: split, delete, undo, trim, crop, aspect, export WebM + MP4, persis
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(page.getByTestId("edit-duration")).not.toHaveText(/^00:00 \//);
 
-  const source = (await storedProject(page)) ?? null; // not saved until first edit
-  expect(source).toBeNull();
+  // Not saved until the first edit, except for automatic zooms found by the activity analysis.
+  const source = (await storedProject(page)) ?? null;
+  if (source) expect(source.clips).toHaveLength(1);
 
   // Seek to the middle via the ruler and split.
   const ruler = page.getByTestId("timeline-ruler");

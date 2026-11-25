@@ -32,6 +32,12 @@ Browsers don't tell web pages where your cursor is, and tab recordings don't sho
 **CaptureKit Cursor Tracker** extension (see the [extension README](../extension/README.md)) and record a
 **Browser tab**. Cursor moves and clicks are then recorded for cursor effects and automatic zoom.
 
+### Zoom in here
+
+Press the zoom button in the recording controls (or **Alt+Shift+Z**) at a moment you want to highlight. Each press
+becomes a zoom in the editor that you can move, resize or delete. With the extension installed, the shortcut also
+works from any Chrome or Edge tab.
+
 ## 2. Edit a video
 
 Open a recording and press **Edit & export**. Everything is non-destructive and saves automatically.
@@ -51,6 +57,32 @@ Other shortcuts: **Space** play/pause, **←/→** step a frame (Shift: 1 second
 
 **Export** to WebM or MP4 (where your browser can encode MP4) at 1080p, 720p or the original size. Export runs
 in real time (a 5-minute video takes about 5 minutes) and pauses if you switch to another tab.
+
+### Automatic zoom
+
+The first time you open a recording without cursor data, the editor analyses it on your device ("Finding where the
+action is…") and adds zooms where menus, dialogs or typing appear. It ignores constant animations and full-page
+scrolls. This is an estimate; turn it off in the Zoom panel or edit any zoom. Tab recordings made with the extension
+use the exact pointer instead.
+
+### Speed
+
+In **Trim & cut**, select a clip (split first to speed up only part of the video) and pick 0.5× to 4×.
+
+### Looks
+
+- **Background:** colours, gradients, wallpapers, your own image (kept on this device), or a blurred copy of the video,
+  with an optional blur.
+- **Webcam:** roundness, edge margin, and "Shrink while zoomed in" so it covers less of the action.
+- **Cursor** (extension recordings): dark, light or dot style, click bounce, motion blur and sway.
+
+### Export, import and project files
+
+- Export MP4, WebM or **GIF** (small/medium/large, 10–20 fps, loop on/off). GIFs have no sound.
+- **Save project file** (editor toolbar) downloads one `.capturekit` file with the recording and all edits.
+  **Open project file** on the Recordings page continues it in any browser.
+- **Import video** on the Recordings page adds an MP4 or WebM so you can edit it like a recording.
+- Press **?** in the editor for all keyboard shortcuts.
 
 ## 3. Edit a screenshot
 

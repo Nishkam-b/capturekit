@@ -2,12 +2,14 @@
 
 import type { ReactNode } from "react";
 import { Camera, Crop, MousePointer2, PaintBucket, Scissors, Shapes, Volume2, ZoomIn } from "lucide-react";
-import { ASPECT_RATIOS, BACKGROUNDS, FULL_CROP, type AspectPreset, type EditProject } from "@/engines/editor/project";
-import { clipDuration, isUntrimmed, totalDuration } from "@/engines/editor/timeline";
+import { ASPECT_RATIOS, BACKGROUNDS, BG_BLURRED, BG_IMAGE, FULL_CROP, SPEEDS, type AspectPreset, type BackgroundPreset, type EditProject } from "@/engines/editor/project";
+import { clipDuration, clipSpeed, isUntrimmed, setClipSpeed, totalDuration } from "@/engines/editor/timeline";
 import { formatDuration } from "@/engines/shared/format";
 import { ZOOM_LEVELS, type ZoomSegment, type ZoomSettings } from "@/engines/zoom/types";
 import { ANNOTATION_COLORS, KIND_LABEL, type Annotation, type AnnotationKind } from "@/engines/annotations/types";
 import type { WebcamStyle } from "@/engines/editor/webcam";
+import { Droplets, ImagePlus } from "lucide-react";
+import { CURSOR_THEMES } from "@/engines/cursor/render";
 import { Button, Toggle, cx } from "../ui";
 
 export type Tool = "trim" | "crop" | "background" | "webcam" | "cursor" | "zoom" | "annotate" | "audio";
@@ -70,6 +72,11 @@ interface PanelProps {
   hasAudio: boolean;
   /** Number of recorded cursor events (0 = no telemetry). */
   cursorEvents: number;
+  /** Events driving automatic zoom (precise cursor data or estimated screen activity). */
+  zoomEvents: number;
+  zoomSource: "extension" | "native" | "video" | null;
+  /** Screen-activity analysis in progress (0..1), or its error. */
+  analysis: { progress: number; error?: string } | null;
   updateZoom: (patch: Partial<ZoomSettings>, opts?: { transient?: boolean; regenerate?: boolean }) => void;
   addZoom: () => void;
   editZoom: (id: string, patch: Partial<ZoomSegment>, transient?: boolean) => void;
@@ -77,6 +84,9 @@ interface PanelProps {
   selectedZoomId: string | null;
   onSelectZoom: (id: string) => void;
   updateWebcam: (patch: Partial<WebcamStyle>, transient?: boolean) => void;
+  /** Object URL of the uploaded background image, if any. */
+  backgroundImageUrl: string | null;
+  onBackgroundImage: (file: File) => void;
   addAnnotation: (kind: AnnotationKind) => void;
   editAnnotation: (id: string, patch: Partial<Annotation>, transient?: boolean) => void;
   deleteAnnotation: (id: string) => void;
@@ -109,7 +119,19 @@ export function Section({ title, children, hint }: { title: string; children: Re
   );
 }
 
-export function Chips<T extends string>({ label, value, options, onPick }: { label: string; value: T; options: [T, string][]; onPick: (v: T) => void }) {
+export function Chips<T extends string>({
+  label,
+  value,
+  options,
+  onPick,
+  disabled = false,
+}: {
+  label: string;
+  value: T;
+  options: [T, string][];
+  onPick: (v: T) => void;
+  disabled?: boolean;
+}) {
   return (
     <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
       {options.map(([v, text]) => (
@@ -119,6 +141,7 @@ export function Chips<T extends string>({ label, value, options, onPick }: { lab
           role="radio"
           aria-checked={v === value}
           aria-label={`${label}: ${text}`}
+          disabled={disabled}
           onClick={() => onPick(v)}
           className={cx(
             "h-8 min-w-10 rounded-chip border px-2.5 text-xs font-semibold",
@@ -179,6 +202,7 @@ export function Slider({
 
 function TrimPanel({ project, selectedId, onSelect, onSplit, onDelete, update }: PanelProps) {
   const total = totalDuration(project.clips);
+  const selectedClip = project.clips.find((c) => c.id === selectedId) ?? null;
   return (
     <>
       <Section
@@ -199,6 +223,18 @@ function TrimPanel({ project, selectedId, onSelect, onSplit, onDelete, update }:
           </Button>
         </div>
       </Section>
+      <Section
+        title="Speed"
+        hint={selectedClip ? "Speeds up or slows down the selected clip. Voices keep their pitch." : "Select a clip (or split one first) to change its speed."}
+      >
+        <Chips
+          label="Clip speed"
+          value={String(selectedClip ? clipSpeed(selectedClip) : 1)}
+          options={SPEEDS.map((v) => [String(v), `${v}×`] as [string, string])}
+          onPick={(v) => selectedClip && update({ clips: setClipSpeed(project.clips, selectedClip.id, Number(v)) })}
+          disabled={!selectedClip}
+        />
+      </Section>
       <Section title={`Clips (${project.clips.length})`} hint={`Edited length ${formatDuration(total)} of ${formatDuration(project.sourceDurationMs)}`}>
         <ol className="space-y-1">
           {project.clips.map((c, i) => (
@@ -213,6 +249,7 @@ function TrimPanel({ project, selectedId, onSelect, onSplit, onDelete, update }:
               >
                 <span className="font-medium">Clip {i + 1}</span>
                 <span className="text-muted tabular-nums">
+                  {clipSpeed(c) !== 1 && <b className="mr-1 text-primary-strong">{clipSpeed(c)}×</b>}
                   {formatDuration(c.start)}–{formatDuration(c.end)} · {formatDuration(clipDuration(c))}
                 </span>
               </button>
@@ -273,8 +310,10 @@ function CropPanel({ project, update }: PanelProps) {
   );
 }
 
-function BackgroundPanel({ project, update, live, liveStart, liveEnd }: PanelProps) {
+function BackgroundPanel({ project, update, live, liveStart, liveEnd, backgroundImageUrl, onBackgroundImage }: PanelProps) {
   const visible = project.padding > 0 || project.aspect !== "source";
+  const tile = (selected: boolean) =>
+    cx("aspect-square rounded-chip border-2", selected ? "border-primary ring-2 ring-primary/30" : "border-line");
   return (
     <>
       <Section title="Background" hint={visible ? undefined : "Add padding or change the aspect ratio to see the background."}>
@@ -292,9 +331,61 @@ function BackgroundPanel({ project, update, live, liveStart, liveEnd }: PanelPro
                 "aspect-square rounded-chip border-2",
                 project.background === b.id ? "border-primary ring-2 ring-primary/30" : "border-line",
               )}
-              style={{ background: b.stops.length === 1 ? b.stops[0] : `linear-gradient(135deg, ${b.stops[0]}, ${b.stops[1]})` }}
+              style={{ background: swatchCss(b) }}
             />
           ))}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={project.background === BG_BLURRED}
+            aria-label="Background: Blurred video"
+            title="Blurred video"
+            onClick={() => update({ background: BG_BLURRED })}
+            className={cx(tile(project.background === BG_BLURRED), "grid place-items-center bg-gradient-to-br from-slate-300 to-slate-500 text-white")}
+          >
+            <Droplets className="size-4" />
+          </button>
+          <label
+            role="radio"
+            aria-checked={project.background === BG_IMAGE}
+            aria-label="Background: Your image"
+            title={backgroundImageUrl ? "Your image (click to replace)" : "Upload an image"}
+            className={cx(tile(project.background === BG_IMAGE), "grid cursor-pointer place-items-center overflow-hidden bg-subtle bg-cover bg-center text-muted")}
+            style={backgroundImageUrl ? { backgroundImage: `url(${backgroundImageUrl})` } : undefined}
+            onClick={(e) => {
+              if (backgroundImageUrl && project.background !== BG_IMAGE) {
+                e.preventDefault();
+                update({ background: BG_IMAGE });
+              }
+            }}
+          >
+            {!backgroundImageUrl && <ImagePlus className="size-4" />}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="sr-only"
+              data-testid="background-upload"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) onBackgroundImage(f);
+              }}
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-faint">Your image stays on this device with the recording.</p>
+        <div className="mt-3">
+          <Slider
+            label="Background blur"
+            value={project.backgroundBlur ?? 0}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => (v === 0 ? "Off" : `${Math.round(v * 100)}%`)}
+            onChange={(backgroundBlur) => live({ backgroundBlur })}
+            onStart={liveStart}
+            onEnd={liveEnd}
+          />
         </div>
       </Section>
       <Section title="Frame">
@@ -393,6 +484,21 @@ function CursorPanel({ project, update, live, liveStart, liveEnd, cursorEvents }
           <Toggle label="Hide when still" checked={c.hideIdle} onChange={(hideIdle) => set({ hideIdle })} />
         </div>
       </Section>
+      <Section title="Style">
+        <p className="mb-1.5 text-xs font-medium text-muted">Cursor look</p>
+        <Chips label="Cursor look" value={c.theme} options={CURSOR_THEMES} onPick={(theme) => set({ theme })} />
+        <div className="mt-3">
+          <Slider label="Motion blur" value={c.motionBlur} min={0} max={1} step={0.05} format={(v) => (v === 0 ? "Off" : `${Math.round(v * 100)}%`)} onChange={(motionBlur) => setLive({ motionBlur })} onStart={liveStart} onEnd={liveEnd} />
+        </div>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-medium text-muted">Bounce on click</span>
+          <Toggle label="Bounce on click" checked={c.clickBounce} onChange={(clickBounce) => set({ clickBounce })} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted">Sway while moving</span>
+          <Toggle label="Sway while moving" checked={c.sway} onChange={(sway) => set({ sway })} />
+        </div>
+      </Section>
       <Section title="Highlight">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-xs font-medium text-muted">Circle behind cursor</span>
@@ -451,24 +557,43 @@ const LEVEL_OPTIONS: [string, string][] = ZOOM_LEVELS.map((l) => [String(l), `${
 
 function ZoomPanel(p: PanelProps) {
   const z = p.project.zoom;
-  const hasTelemetry = p.cursorEvents > 0;
+  const hasTelemetry = p.zoomEvents > 0;
+  const estimated = p.zoomSource === "video";
   const selected = z.segments.find((s) => s.id === p.selectedZoomId) ?? null;
   const regen = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true });
   const regenLive = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true, transient: true });
+  const pct = Math.round((p.analysis?.progress ?? 0) * 100);
   return (
     <>
       <Section
         title="Automatic zoom"
         hint={
           hasTelemetry
-            ? "Zooms in around clicks (and pauses, if enabled) and follows the cursor. Plain cursor movement never zooms."
+            ? estimated
+              ? "Based on screen activity (estimated): zooms in where dialogs, menus and typing appear, and follows the action."
+              : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and follows the cursor."
             : undefined
         }
       >
-        {!hasTelemetry ? (
+        {p.analysis && !p.analysis.error ? (
+          <div data-testid="activity-analysis">
+            <p className="mb-2 text-xs text-muted">Finding where the action is… {pct}%</p>
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-line"
+              role="progressbar"
+              aria-label="Analysing recording"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct}
+            >
+              <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-2 text-[11px] text-faint">Runs on this device only. You can keep editing meanwhile.</p>
+          </div>
+        ) : !hasTelemetry ? (
           <p className="text-xs text-muted">
-            Automatic zoom needs cursor data. Record a <b>browser tab</b> with the CaptureKit extension installed. You can still
-            add zooms by hand below.
+            {p.analysis?.error ? `Couldn't analyse this recording (${p.analysis.error}).` : "No on-screen activity was found to zoom into."} You can
+            still add zooms by hand below.
           </p>
         ) : (
           <>
@@ -491,6 +616,9 @@ function ZoomPanel(p: PanelProps) {
               onStart={p.liveStart}
               onEnd={p.liveEnd}
             />
+            {estimated && (
+              <p className="mt-2 text-[11px] text-faint">For zooms that follow the exact pointer, record a tab with the CaptureKit extension.</p>
+            )}
           </>
         )}
       </Section>
@@ -649,9 +777,17 @@ function WebcamPanel({ project, updateWebcam, liveStart, liveEnd, hasCamera }: P
             <span className="text-xs font-medium text-muted">Shadow</span>
             <Toggle label="Webcam shadow" checked={w.shadow} onChange={(shadow) => updateWebcam({ shadow })} />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Mirror</span>
             <Toggle label="Mirror webcam" checked={w.mirror} onChange={(mirror) => updateWebcam({ mirror })} />
+          </div>
+          <div className={cx(w.shape === "circle" && "pointer-events-none opacity-50")}>
+            <Slider label="Roundness" value={w.roundness} min={0} max={0.5} step={0.01} format={(v) => `${Math.round(v * 200)}%`} onChange={(roundness) => updateWebcam({ roundness }, true)} onStart={liveStart} onEnd={liveEnd} />
+          </div>
+          <Slider label="Edge margin" value={w.margin} min={0} max={0.12} step={0.005} format={(v) => `${Math.round(v * 1000) / 10}%`} onChange={(margin) => updateWebcam({ margin }, true)} onStart={liveStart} onEnd={liveEnd} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted">Shrink while zoomed in</span>
+            <Toggle label="Shrink webcam while zoomed in" checked={w.shrinkOnZoom} onChange={(shrinkOnZoom) => updateWebcam({ shrinkOnZoom })} />
           </div>
         </div>
       </Section>
@@ -821,4 +957,12 @@ export function AnnotationEditor(p: AnnotationEditorProps) {
       )}
     </>
   );
+}
+
+/** CSS approximation of a background preset, for its swatch. */
+function swatchCss(b: BackgroundPreset): string {
+  const base = b.stops.length === 1 ? b.stops[0] : `linear-gradient(135deg, ${b.stops[0]}, ${b.stops[1]})`;
+  if (!b.blobs) return base;
+  const blobs = b.blobs.map(([x, y, r, c]) => `radial-gradient(circle at ${x * 100}% ${y * 100}%, ${c} 0, transparent ${Math.round(r * 140)}%)`);
+  return [...blobs, base].join(", ");
 }

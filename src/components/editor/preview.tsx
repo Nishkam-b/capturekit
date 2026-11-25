@@ -7,6 +7,7 @@ import type { Annotation } from "@/engines/annotations/types";
 import { clampCrop, type EditProject, type NormRect } from "@/engines/editor/project";
 import type { WebcamStyle } from "@/engines/editor/webcam";
 import { AnnotationOverlay, WebcamOverlay } from "./overlays";
+import type { BackgroundImage } from "@/engines/editor/layout";
 
 interface Props {
   screenUrl: string;
@@ -17,6 +18,7 @@ interface Props {
   onCrop: (crop: NormRect, transient: boolean) => void;
   onCropCommit: (before: NormRect) => void;
   cursor: CursorBundle | null;
+  backgroundImage?: BackgroundImage | null;
   /** When set, clicking the preview picks a point (normalised source coords) instead of play/pause. */
   onPick?: (x: number, y: number) => void;
   /** Drag/resize the webcam on the preview (Webcam tool). */
@@ -32,7 +34,7 @@ interface Props {
 }
 
 /** Canvas preview of the edit, plus the crop overlay in crop mode. */
-export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, cursor, onPick, webcamEdit, annotationEdit }: Props) {
+export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, cursor, backgroundImage = null, onPick, webcamEdit, annotationEdit }: Props) {
   const screenRef = useRef<HTMLVideoElement>(null);
   const camRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -94,6 +96,10 @@ export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop,
   useEffect(() => {
     player?.setCursor(cursor);
   }, [player, cursor]);
+
+  useEffect(() => {
+    player?.setBackgroundImage(backgroundImage);
+  }, [player, backgroundImage]);
 
   return (
     <div ref={boxRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-6">

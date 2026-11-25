@@ -13,6 +13,7 @@ type ExtMessage =
   | { type: "armed"; count: number }
   | { type: "tracking"; tabId: number }
   | { type: "events"; events: Array<[number, number, number, number]> }
+  | { type: "zoom-marker" }
   | { type: "disconnected" };
 
 function send(msg: Record<string, unknown>) {
@@ -28,6 +29,13 @@ function listen(handler: (m: ExtMessage) => void): () => void {
   };
   window.addEventListener("message", onMessage);
   return () => window.removeEventListener("message", onMessage);
+}
+
+/** Calls back when the extension's "zoom here" shortcut is pressed in any tab. */
+export function onExtensionZoomMarker(handler: () => void): () => void {
+  return listen((m) => {
+    if (m.type === "zoom-marker") handler();
+  });
 }
 
 /** Resolves with the extension version, or null if it isn't installed / enabled for this page. */

@@ -26,6 +26,9 @@ export interface CursorState {
   /** Clicks still animating: age in ms (0..CLICK_MS). */
   clicks: Array<{ age: number; x: number; y: number }>;
   pressed: boolean;
+  /** Velocity in normalised units per second (for motion blur and sway). */
+  vx: number;
+  vy: number;
 }
 
 /**
@@ -116,7 +119,7 @@ export function buildCursorPath(events: readonly CursorEvent[], smoothing: numbe
 /** Cursor state at active time `t` (ms). */
 export function cursorStateAt(path: CursorPath, t: number, pressedRanges?: Array<[number, number]>): CursorState {
   const raw = (t - path.t0) / DT;
-  if (raw < 0) return { x: 0, y: 0, visible: false, idleMs: 0, clicks: [], pressed: false };
+  if (raw < 0) return { x: 0, y: 0, visible: false, idleMs: 0, clicks: [], pressed: false, vx: 0, vy: 0 };
   const i = Math.min(path.count - 1, Math.round(raw));
   const clicks: CursorState["clicks"] = [];
   for (const c of path.clicks) {
@@ -124,7 +127,20 @@ export function cursorStateAt(path: CursorPath, t: number, pressedRanges?: Array
     if (age >= 0 && age <= CLICK_MS) clicks.push({ age, x: c.x, y: c.y });
   }
   const pressed = !!pressedRanges?.some(([a, b]) => t >= a && t <= b);
-  return { x: path.xy[i * 2], y: path.xy[i * 2 + 1], visible: path.visible[i] === 1 && raw <= path.count, idleMs: path.idle[i], clicks, pressed };
+  const j = Math.max(0, i - 2);
+  const span = ((i - j) * DT) / 1000;
+  const vx = span > 0 ? (path.xy[i * 2] - path.xy[j * 2]) / span : 0;
+  const vy = span > 0 ? (path.xy[i * 2 + 1] - path.xy[j * 2 + 1]) / span : 0;
+  return {
+    x: path.xy[i * 2],
+    y: path.xy[i * 2 + 1],
+    visible: path.visible[i] === 1 && raw <= path.count,
+    idleMs: path.idle[i],
+    clicks,
+    pressed,
+    vx,
+    vy,
+  };
 }
 
 /** [down, up] time ranges, for drawing the cursor slightly pressed. */
@@ -144,7 +160,7 @@ export function pressedRanges(events: readonly CursorEvent[]): Array<[number, nu
 /** Everything the renderer needs from cursor telemetry. */
 export interface CursorBundle {
   /** Path drawn as the cursor (user smoothing). */
-  path: CursorPath;
+  path: CursorPath | null;
   pressed: Array<[number, number]>;
   /** Heavily smoothed path the zoom camera follows. */
   follow: CursorPath;

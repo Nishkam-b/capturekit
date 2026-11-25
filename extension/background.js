@@ -103,6 +103,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// "Zoom here" shortcut: works while any Chrome tab has focus. Only CaptureKit app
+// pages (the content-script bridge) act on it, and only while recording.
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "zoom-marker") return;
+  for (const t of await allTabs()) {
+    if (t.id === undefined) continue;
+    chrome.tabs.sendMessage(t.id, { type: "zoom-marker" }).catch(() => {});
+  }
+});
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   ready.then(() => {
     if (tabId === state.appTabId) void stopAll();

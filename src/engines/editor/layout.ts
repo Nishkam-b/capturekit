@@ -3,8 +3,8 @@ import { drawCursor, type PointMapper } from "../cursor/render";
 import { drawAnnotations } from "../annotations/render";
 import { zoomRect } from "../zoom/camera";
 import type { ZoomCamera } from "../zoom/types";
-import { ASPECT_RATIOS, backgroundById, type EditProject, type NormRect } from "./project";
-import { webcamBox, webcamRadius, type WebcamStyle } from "./webcam";
+import { ASPECT_RATIOS, BG_BLURRED, BG_IMAGE, backgroundById, type BackgroundPreset, type EditProject, type NormRect } from "./project";
+import { webcamBox, webcamRadius, zoomedWebcamBox, type WebcamStyle } from "./webcam";
 
 export interface Rect {
   x: number;
@@ -123,21 +123,14 @@ export function drawFrame(
   zoom: ZoomCamera | null = null,
   /** Source time of this frame (ms), for timed annotations. */
   timeMs = 0,
+  /** Uploaded background image (when project.background is "image"). */
+  backgroundImage: BackgroundImage | null = null,
 ): void {
   const { out, dst, radius, cam } = layout;
   // Smart zoom narrows the part of the source drawn into the same destination box.
   const src = zoom ? zoomRect(layout.src, layout.source.w, layout.source.h, zoom) : layout.src;
   const view: FrameLayout = src === layout.src ? layout : { ...layout, src };
-  const bg = backgroundById(project.background);
-  if (bg.stops.length === 1) {
-    ctx.fillStyle = bg.stops[0];
-  } else {
-    const g = ctx.createLinearGradient(0, 0, out.w, out.h);
-    g.addColorStop(0, bg.stops[0]);
-    g.addColorStop(1, bg.stops[1]);
-    ctx.fillStyle = g;
-  }
-  ctx.fillRect(0, 0, out.w, out.h);
+  drawBackground(ctx, project, out.w, out.h, screen, layout, backgroundImage);
 
   const short = Math.min(out.w, out.h);
   if (project.shadow) {
@@ -169,7 +162,84 @@ export function drawFrame(
   }
   ctx.restore();
 
-  if (cam && camera && (camera.videoWidth ?? 1) > 0) drawWebcam(ctx, project.webcam, cam, camera);
+  if (cam && camera && (camera.videoWidth ?? 1) > 0) {
+    const box = project.webcam.shrinkOnZoom && zoom ? zoomedWebcamBox(cam, out.w, out.h, zoom.scale) : cam;
+    drawWebcam(ctx, project.webcam, box, camera);
+  }
+}
+
+export type BackgroundImage = CanvasImageSource & { width: number; height: number };
+
+/** Paints the area around the video: preset, wallpaper, uploaded image or the blurred video itself. */
+function drawBackground(
+  ctx: Ctx,
+  project: EditProject,
+  w: number,
+  h: number,
+  screen: CanvasImageSource,
+  layout: FrameLayout,
+  image: BackgroundImage | null,
+) {
+  const blurPx = Math.round((project.backgroundBlur ?? 0) * Math.max(w, h) * 0.03);
+  const filter = blurPx > 0 ? `blur(${blurPx}px)` : "none";
+  if (project.background === BG_IMAGE && image && image.width > 0) {
+    ctx.save();
+    ctx.filter = filter;
+    coverDraw(ctx, image, image.width, image.height, w, h, blurPx);
+    ctx.restore();
+    return;
+  }
+  if (project.background === BG_BLURRED) {
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    // Always somewhat blurred, so it reads as a backdrop.
+    ctx.filter = `blur(${Math.max(blurPx, Math.round(Math.max(w, h) * 0.02))}px) brightness(0.85)`;
+    coverDraw(ctx, screen, layout.source.w, layout.source.h, w, h, Math.max(blurPx, Math.max(w, h) * 0.02));
+    ctx.restore();
+    return;
+  }
+  const bg = backgroundById(project.background === BG_IMAGE || project.background === BG_BLURRED ? "mint" : project.background);
+  ctx.save();
+  if (bg.blobs && blurPx > 0) ctx.filter = filter;
+  paintPreset(ctx, bg, w, h);
+  ctx.restore();
+}
+
+/** Fills w×h with a preset (solid, gradient, or wallpaper). Also used for swatches. */
+export function paintPreset(ctx: Ctx, bg: BackgroundPreset, w: number, h: number) {
+  if (bg.stops.length === 1) {
+    ctx.fillStyle = bg.stops[0];
+  } else {
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, bg.stops[0]);
+    g.addColorStop(1, bg.stops[1]);
+    ctx.fillStyle = g;
+  }
+  ctx.fillRect(0, 0, w, h);
+  if (!bg.blobs) return;
+  const long = Math.max(w, h);
+  for (const [bx, by, br, color] of bg.blobs) {
+    const x = bx * w;
+    const y = by * h;
+    const r = br * long;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color.length === 9 ? `${color.slice(0, 7)}00` : "transparent");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+/** Draws an image scaled to cover w×h (with `bleed` px extra so blurred edges don't fade). */
+function coverDraw(ctx: Ctx, img: CanvasImageSource, iw: number, ih: number, w: number, h: number, bleed = 0) {
+  if (!iw || !ih) return;
+  const W = w + bleed * 2;
+  const H = h + bleed * 2;
+  const s = Math.max(W / iw, H / ih);
+  const dw = iw * s;
+  const dh = ih * s;
+  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
 /** Webcam bubble: shape, border, shadow, mirror; the camera image is centre-cropped to the box aspect. */
@@ -181,7 +251,7 @@ export function drawWebcam(
 ): void {
   const vw = camera.videoWidth ?? box.w;
   const vh = camera.videoHeight ?? box.h;
-  const r = webcamRadius(style.shape, box);
+  const r = webcamRadius(style.shape, box, style.roundness);
   const border = style.border > 0 ? Math.max(1, Math.round(box.h * style.border)) : 0;
 
   ctx.save();

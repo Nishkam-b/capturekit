@@ -19,7 +19,12 @@ export interface Clip {
   id: string;
   start: number;
   end: number;
+  /** Playback speed (1 = normal). A 2× clip takes half as long in the output. */
+  speed?: number;
 }
+
+/** Speeds offered in the editor. */
+export const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4] as const;
 
 /** Rectangle in normalised source coordinates (0..1). */
 export interface NormRect {
@@ -34,7 +39,13 @@ export interface BackgroundPreset {
   label: string;
   /** One colour = solid; two = diagonal gradient. */
   stops: [string] | [string, string];
+  /** Wallpapers: soft colour blobs over the gradient [x, y, radius (of the long side), colour]. */
+  blobs?: Array<[number, number, number, string]>;
 }
+
+/** Special backgrounds that aren't presets. */
+export const BG_IMAGE = "image";
+export const BG_BLURRED = "blurred";
 
 export const BACKGROUNDS: BackgroundPreset[] = [
   { id: "ink", label: "Ink", stops: ["#0f172a"] },
@@ -45,6 +56,13 @@ export const BACKGROUNDS: BackgroundPreset[] = [
   { id: "sky", label: "Sky", stops: ["#bae6fd", "#818cf8"] },
   { id: "sunset", label: "Sunset", stops: ["#fdba74", "#f472b6"] },
   { id: "night", label: "Night", stops: ["#1e293b", "#4c1d95"] },
+  // Wallpapers (drawn procedurally, so they stay sharp at any size).
+  { id: "aurora", label: "Aurora", stops: ["#0b1120", "#0f2a3d"], blobs: [[0.2, 0.25, 0.55, "#10b98199"], [0.8, 0.3, 0.5, "#6366f188"], [0.55, 0.95, 0.6, "#06b6d466"]] },
+  { id: "dusk", label: "Dusk", stops: ["#312e81", "#7c2d12"], blobs: [[0.15, 0.85, 0.6, "#f9731699"], [0.85, 0.15, 0.55, "#db277799"], [0.5, 0.5, 0.35, "#a855f744"]] },
+  { id: "lagoon", label: "Lagoon", stops: ["#ecfeff", "#cffafe"], blobs: [[0.1, 0.1, 0.5, "#67e8f9aa"], [0.9, 0.9, 0.6, "#34d399aa"], [0.85, 0.15, 0.35, "#a5b4fc88"]] },
+  { id: "candy", label: "Candy", stops: ["#fdf2f8", "#fae8ff"], blobs: [[0.2, 0.8, 0.55, "#f9a8d4bb"], [0.8, 0.2, 0.55, "#c4b5fdbb"], [0.6, 0.7, 0.3, "#fde68a99"]] },
+  { id: "forest", label: "Forest", stops: ["#052e16", "#14532d"], blobs: [[0.75, 0.2, 0.6, "#22c55e66"], [0.2, 0.9, 0.5, "#84cc1655"]] },
+  { id: "graphite", label: "Graphite", stops: ["#18181b", "#27272a"], blobs: [[0.5, 0.0, 0.7, "#52525b66"], [0.1, 1, 0.5, "#3f3f4666"]] },
 ];
 
 export interface EditProject {
@@ -71,6 +89,8 @@ export interface EditProject {
   zoom: ZoomSettings;
   /** Text, arrows, shapes, highlighter and blur, drawn over the screen. */
   annotations: Annotation[];
+  /** 0..1 blur applied to the background (wallpaper, uploaded image or blurred video). */
+  backgroundBlur?: number;
 }
 
 export const FULL_CROP: NormRect = { x: 0, y: 0, w: 1, h: 1 };

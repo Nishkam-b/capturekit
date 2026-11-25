@@ -2,6 +2,29 @@
 
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] — 2026-11-25 — Phase 8: automatic zoom for every recording, one-click extension, editor features
+
+### Added
+- **Automatic zoom without the extension.** The editor analyses screen, window and tab recordings on the device
+  (low-resolution frame differences; constant animations and full-screen changes ignored) and zooms where things
+  happen. Shown with progress, labelled as an estimate, saved with the recording. Auto zoom is on by default.
+- **"Zoom in here"** while recording: a button in the controls, Alt+Shift+Z, and (with the extension) a browser-wide
+  shortcut. Marks become manual zooms.
+- **Extension download:** the extension is packaged as a zip (with icons) by a dependency-free script during the
+  build; the Help page has a 3-step install with a copy button. Extension 0.3.0 adds the zoom shortcut.
+- **Speed regions:** per-clip speed 0.5×–4× in the preview, timeline and export.
+- **Cursor:** dark/light/dot styles, click bounce, motion blur, sway.
+- **Backgrounds:** six procedural wallpapers, your own image, a blurred copy of the video, background blur.
+- **Webcam:** roundness, edge margin, shrink while zoomed in.
+- **GIF export** with size, frame rate and loop options (built-in encoder, no new dependency).
+- **Import video** files; save and open **`.capturekit` project files**.
+- Keyboard shortcut reference in the editor (**?**).
+- **FAQ, privacy policy and terms** pages, and a site footer.
+
+### Changed
+- Help page: the extension is presented as optional, with the shorter install.
+- Manual zooms follow the pointer only with precise (extension) cursor data.
+
 ## [0.8.0] — 2026-11-25 — Phase 7: open-source release candidate
 
 ### Added

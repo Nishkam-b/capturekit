@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { Camera, Minus, MousePointer2, Plus, Scissors, Shapes, Trash2, Volume2, ZoomIn } from "lucide-react";
 import type { FilmFrame, Waveform } from "@/engines/editor/analysis";
 import type { Clip } from "@/engines/editor/project";
-import { clipDuration, clipOffsets, sourceToOutputClamped, totalDuration } from "@/engines/editor/timeline";
+import { clipDuration, clipOffsets, clipSpeed, sourceToOutputClamped, totalDuration } from "@/engines/editor/timeline";
 import type { ZoomSegment } from "@/engines/zoom/types";
 import { formatDuration } from "@/engines/shared/format";
 import { cx } from "../ui";
@@ -80,11 +80,11 @@ export function Timeline(p: Props) {
   };
 
   // ---- trimming
-  const trim = useRef<{ id: string; edge: "start" | "end"; x: number; startMs: number } | null>(null);
+  const trim = useRef<{ id: string; edge: "start" | "end"; x: number; startMs: number; speed: number } | null>(null);
   const trimDown = (clip: Clip, edge: "start" | "end") => (e: ReactPointerEvent) => {
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    trim.current = { id: clip.id, edge, x: e.clientX, startMs: edge === "start" ? clip.start : clip.end };
+    trim.current = { id: clip.id, edge, x: e.clientX, startMs: edge === "start" ? clip.start : clip.end, speed: clipSpeed(clip) };
     p.onSelect(clip.id);
     p.onTrimStart();
   };
@@ -120,7 +120,7 @@ export function Timeline(p: Props) {
     }
     const t = trim.current;
     if (!t) return;
-    p.onTrim(t.id, t.edge, t.startMs + (e.clientX - t.x) / pxPerMs);
+    p.onTrim(t.id, t.edge, t.startMs + ((e.clientX - t.x) / pxPerMs) * t.speed);
   };
   const trimUp = () => {
     if (zdrag.current) p.onZoomEditEnd();
@@ -460,7 +460,8 @@ function ClipBlock({
 }
 
 function Filmstrip({ clip, frames, spacingMs, pxPerMs }: { clip: Clip; frames: FilmFrame[]; spacingMs: number; pxPerMs: number }) {
-  const w = Math.max(8, spacingMs * pxPerMs);
+  const speed = clipSpeed(clip);
+  const w = Math.max(8, (spacingMs * pxPerMs) / speed);
   return (
     <>
       {frames
@@ -473,7 +474,7 @@ function Filmstrip({ clip, frames, spacingMs, pxPerMs }: { clip: Clip; frames: F
             alt=""
             draggable={false}
             className="pointer-events-none absolute inset-y-0 h-full object-cover opacity-90"
-            style={{ left: (f.timeMs - spacingMs / 2 - clip.start) * pxPerMs, width: w }}
+            style={{ left: ((f.timeMs - spacingMs / 2 - clip.start) * pxPerMs) / speed, width: w }}
           />
         ))}
     </>

@@ -18,18 +18,26 @@ No account, no uploads, no subscription: everything stays on your device.
 - Entire screen, an application window or a browser tab, with **webcam** (saved as its own track) and **microphone**
 - Tab audio and, on Windows/ChromeOS, system audio
 - Pause, resume, countdown, mic mute, screenshots while recording, keyboard shortcuts
+- **"Zoom in here"** button and Alt+Shift+Z while recording
 - Floating pop-out controls (Chrome/Edge)
 - **Crash-safe:** saved second by second, and interrupted recordings can be recovered
 - Storage checks: warns early, stops and saves before space runs out
 
 **Edit video**
 - Trim, split and delete with a filmstrip, waveform and multi-lane timeline; undo/redo; auto-save
-- Crop; 16:9, 9:16, 1:1, 4:5; backgrounds, padding, rounded corners, shadow
-- Webcam overlay anywhere: circle / rounded / rectangle, border, shadow, mirror
-- **Smart zoom:** automatic zoom around clicks that follows the cursor, plus manual zooms
-- **Cursor effects:** cursor, smoothing, highlight, click ripple (via the optional extension)
+- **Speed regions:** play any clip from 0.5× to 4× (voices keep their pitch)
+- Crop; 16:9, 9:16, 1:1, 4:5; solid, gradient and **wallpaper** backgrounds, **your own image**, a **blurred copy
+  of the video**, background blur, padding, rounded corners, shadow
+- Webcam overlay anywhere: circle / rounded / rectangle, roundness, margin, border, shadow, mirror, and it
+  **shrinks while zoomed in**
+- **Automatic zoom with no setup:** the editor analyses the recording on your device to find where the action is
+  (menus, dialogs, typing) and zooms there; with the extension it follows the exact pointer. Plus manual zooms.
+- **Cursor effects:** cursor (dark, light or dot), smoothing, highlight, click ripple, click bounce, motion blur,
+  sway (via the optional extension)
 - **Annotations:** text, arrows, shapes, highlighter and **blur** for sensitive info
-- Export **WebM** or **MP4** (where the browser can encode it) at 720p, 1080p or the original size
+- Export **WebM**, **MP4** (where the browser can encode it) or **GIF** (size, frame rate, loop)
+- **Import** an existing video; save and open portable **`.capturekit` project files**
+- Keyboard shortcut reference (press **?** in the editor)
 
 **Edit screenshots**
 - Import (file, drag-and-drop, paste), capture, or open a screenshot from a recording
@@ -65,9 +73,11 @@ Automated tests run in Chrome and Edge; Firefox and Safari still need testing.
 
 ### Cursor tracking extension (optional)
 
-Browsers don't tell web pages where your cursor is. The small extension in [`extension/`](extension/README.md)
-records cursor moves and clicks in the **browser tab you record**, which powers cursor effects and automatic zoom.
-Screen and window recordings will need a planned desktop companion for this.
+Automatic zoom works without it. Browsers don't tell web pages where your cursor is, so for **browser-tab**
+recordings the small extension in [`extension/`](extension/README.md) records cursor moves and clicks, which powers
+a drawn cursor, click effects and zooms that follow the exact pointer, and makes Alt+Shift+Z work from any tab.
+Install it in three steps from the site's Help page (download, open `chrome://extensions` in developer mode, drag
+the folder in). A Chrome Web Store listing is prepared in [docs/EXTENSION_STORE.md](docs/EXTENSION_STORE.md).
 
 ## Run it locally
 

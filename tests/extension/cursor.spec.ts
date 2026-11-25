@@ -127,12 +127,12 @@ test("records cursor moves and clicks in a shared tab and renders them in the ed
   await expect(dialog.getByTestId("export-result")).toBeVisible({ timeout: 60_000 });
 });
 
-test("screen recordings report that cursor tracking needs a browser tab", async () => {
+test("screen recordings explain the cursor is in the video and auto zoom comes from the editor", async () => {
   const app = await ctx.newPage();
   await app.goto(`${BASE}/record`);
   await app.getByRole("radio", { name: /Entire screen/ }).click();
   await expect(app.getByTestId("cursor-extension-status")).toHaveText("Tabs only");
-  await expect(app.getByText(/Browsers don't share cursor positions for screen or window recordings/)).toBeVisible();
+  await expect(app.getByText(/The system cursor is recorded as part of the video/)).toBeVisible();
 });
 
 async function storedZoomSegments(page: Page): Promise<Array<{ auto: boolean; mode: string; start: number; end: number }>> {

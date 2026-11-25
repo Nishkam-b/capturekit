@@ -20,9 +20,10 @@ export async function persistSession(opts: {
   /** Screenshots that couldn't be written during recording. */
   memoryShots: CapturedScreenshot[];
   cursor?: RecordingMeta["cursor"];
+  zoomMarkers?: number[];
   startedAt: Date;
 }): Promise<string> {
-  const { id, result, sink, webcam, memoryShots, startedAt, cursor = null } = opts;
+  const { id, result, sink, webcam, memoryShots, startedAt, cursor = null, zoomMarkers = [] } = opts;
   await sink?.flush().catch(() => undefined);
   const thumb = await thumbnailFromVideo(result.screen.blob);
   const media: Partial<Record<MediaKind, Blob>> = {};
@@ -41,6 +42,7 @@ export async function persistSession(opts: {
     id,
     name: defaultRecordingName(startedAt),
     createdAt: startedAt.getTime(),
+    zoomMarkers: zoomMarkers.length ? zoomMarkers : undefined,
     durationMs: result.durationMs,
     size: result.screen.blob.size + (result.camera?.blob.size ?? 0) + shotBytes,
     screen: {

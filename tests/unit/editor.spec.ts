@@ -134,3 +134,46 @@ test.describe("webcam box", () => {
     });
   });
 });
+
+test.describe("speed regions", () => {
+  test("a 2× clip takes half the output time and maps times both ways", async () => {
+    const { setClipSpeed, totalDuration, locate, sourceToOutput, splitAt } = await import("../../src/engines/editor/timeline");
+    let clips = splitAt([{ id: "a", start: 0, end: 10000 }], 4000, "b");
+    clips = setClipSpeed(clips, "b", 2);
+    expect(totalDuration(clips)).toBe(4000 + 3000);
+    expect(locate(clips, 5000).sourceMs).toBe(6000);
+    expect(sourceToOutput(clips, 8000)).toBe(6000);
+    // splitting a sped-up clip keeps the speed on both halves
+    const again = splitAt(clips, 5500, "c");
+    expect(again.map((c) => c.speed ?? 1)).toEqual([1, 2, 2]);
+    // back to 1× drops the field
+    expect(setClipSpeed(clips, "b", 1)[1].speed).toBeUndefined();
+  });
+});
+
+test.describe("webcam and cursor looks", () => {
+  test("webcam margin moves the bubble off the edge", async () => {
+    const { webcamBox } = await import("../../src/engines/editor/webcam");
+    const tight = webcamBox({ x: 1, y: 1, size: 0.2, shape: "circle", margin: 0 }, 1000, 1000);
+    const loose = webcamBox({ x: 1, y: 1, size: 0.2, shape: "circle", margin: 0.1 }, 1000, 1000);
+    expect(tight.x + tight.w).toBe(1000);
+    expect(loose.x + loose.w).toBe(900);
+  });
+
+  test("webcam shrinks towards its corner while zoomed", async () => {
+    const { zoomedWebcamBox, ZOOM_SHRINK } = await import("../../src/engines/editor/webcam");
+    const box = { x: 760, y: 760, w: 200, h: 200 }; // bottom-right
+    expect(zoomedWebcamBox(box, 1000, 1000, 1)).toEqual(box);
+    const z = zoomedWebcamBox(box, 1000, 1000, 2);
+    expect(z.w).toBe(Math.round(200 * ZOOM_SHRINK));
+    expect(z.x + z.w).toBe(960);
+    expect(z.y + z.h).toBe(960);
+  });
+
+  test("click bounce dips then settles back to full size", async () => {
+    const { bounceScale } = await import("../../src/engines/cursor/render");
+    expect(bounceScale(0)).toBe(1);
+    expect(bounceScale(100)).toBeLessThan(0.9);
+    expect(bounceScale(400)).toBe(1);
+  });
+});

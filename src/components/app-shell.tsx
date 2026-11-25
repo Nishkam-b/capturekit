@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { CircleHelp, Film, Home, Image as ImageIcon, Video } from "lucide-react";
 import { site } from "@/config/site";
+import { SiteFooter } from "./site-footer";
 import { cx } from "./ui";
 
 const NAV = [
@@ -12,7 +13,7 @@ const NAV = [
   { href: "/record", label: "Record", icon: Video },
   { href: "/recordings", label: "Recordings", icon: Film },
   { href: "/screenshots", label: "Screenshots", icon: ImageIcon },
-  { href: "/help", label: "Help & privacy", icon: CircleHelp },
+  { href: "/help", label: "Help", icon: CircleHelp },
 ] as const;
 
 /** Shown so users know what's coming, but not clickable until built. */
@@ -85,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p>
             Recordings stay on this device.
             <br />
-            v{site.version} · MIT licence · Built by {site.by}
+            v{site.version} · MIT licence · by {site.by}
           </p>
         </div>
       </aside>
@@ -111,7 +112,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </header>
 
-      <main className="min-w-0 flex-1">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="min-w-0 flex-1">{children}</main>
+        <SiteFooter />
+      </div>
     </div>
   );
 }

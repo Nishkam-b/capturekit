@@ -2,9 +2,9 @@ import { cursorStateAt, type CursorBundle } from "../cursor/path";
 import { videoBitrateFor } from "../recorder/mime";
 import { zoomAt } from "../zoom/camera";
 import { patchWebmHead } from "../recorder/webm";
-import { drawFrame, frameLayout, outputSize, type ResolutionPreset } from "./layout";
+import { drawFrame, frameLayout, outputSize, type BackgroundImage, type ResolutionPreset } from "./layout";
 import type { EditProject } from "./project";
-import { clipDuration, totalDuration } from "./timeline";
+import { clipDuration, clipSpeed, totalDuration } from "./timeline";
 
 /**
  * Export pipeline v1: plays the edit once in real time, draws each frame with the
@@ -33,6 +33,8 @@ export interface ExportOptions {
   fps?: number;
   /** Cursor telemetry, if the recording has it. */
   cursor?: CursorBundle | null;
+  /** Uploaded background image, if the project uses one. */
+  backgroundImage?: BackgroundImage | null;
 }
 
 export interface ExportResult {
@@ -147,9 +149,10 @@ export async function exportVideo(
         layout,
         screen,
         camera,
-        cur ? cursorStateAt(cur.path, screen.currentTime * 1000 + project.cursor.offsetMs, cur.pressed) : null,
+        cur?.path ? cursorStateAt(cur.path, screen.currentTime * 1000 + project.cursor.offsetMs, cur.pressed) : null,
         project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, screen.currentTime * 1000, cur?.follow ?? null) : null,
         screen.currentTime * 1000,
+        opts.backgroundImage ?? null,
       );
     const total = totalDuration(project.clips);
     let doneMs = 0;
@@ -158,6 +161,10 @@ export async function exportVideo(
       const clip = project.clips[i];
       throwIfAborted();
       await seekAll([screen, camera], clip.start / 1000);
+      // Speed regions: the browser plays faster/slower and keeps the voice's pitch.
+      const rate = clipSpeed(clip);
+      screen.playbackRate = rate;
+      if (camera) camera.playbackRate = rate;
       draw();
       if (recorder.state === "inactive") recorder.start(1000);
       else recorder.resume();
@@ -166,7 +173,7 @@ export async function exportVideo(
         draw,
         signal,
         onTick: (t) => {
-          onProgress({ status: "rendering", fraction: Math.min(1, (doneMs + (t * 1000 - clip.start)) / total) });
+          onProgress({ status: "rendering", fraction: Math.min(1, (doneMs + (t * 1000 - clip.start) / rate) / total) });
         },
         onHidden: (hidden) => {
           if (hidden) {
@@ -204,7 +211,7 @@ export async function exportVideo(
   }
 }
 
-async function loadVideo(blob: Blob, cleanups: Array<() => void>, muted: boolean): Promise<HTMLVideoElement> {
+export async function loadVideo(blob: Blob, cleanups: Array<() => void>, muted: boolean): Promise<HTMLVideoElement> {
   const url = URL.createObjectURL(blob);
   const v = document.createElement("video");
   v.muted = muted;
@@ -221,7 +228,7 @@ async function loadVideo(blob: Blob, cleanups: Array<() => void>, muted: boolean
   return v;
 }
 
-async function seekAll(videos: Array<HTMLVideoElement | null>, t: number) {
+export async function seekAll(videos: Array<HTMLVideoElement | null>, t: number) {
   await Promise.all(
     videos.map(async (v) => {
       if (!v) return;

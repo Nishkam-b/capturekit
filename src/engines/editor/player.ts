@@ -1,8 +1,8 @@
 import { cursorStateAt, type CursorBundle } from "../cursor/path";
 import { zoomAt } from "../zoom/camera";
-import { drawFrame, frameLayout, outputSize, outputToSource, type FrameLayout } from "./layout";
+import { drawFrame, frameLayout, outputSize, outputToSource, type BackgroundImage, type FrameLayout } from "./layout";
 import { FULL_CROP, type EditProject } from "./project";
-import { clipOffsets, locate, totalDuration } from "./timeline";
+import { clipOffsets, clipSpeed, locate, toOutput, totalDuration } from "./timeline";
 
 export type PreviewMode = "edit" | "crop" | "annotate";
 
@@ -72,6 +72,14 @@ export class PreviewPlayer {
     }
   }
 
+  private backgroundImage: BackgroundImage | null = null;
+
+  /** Uploaded background image (null = none). */
+  setBackgroundImage(img: BackgroundImage | null) {
+    this.backgroundImage = img;
+    if (!this._playing) this.draw();
+  }
+
   /** Cursor telemetry for this recording (null = none). */
   setCursor(cursor: CursorBundle | null) {
     this.cursor = cursor;
@@ -117,7 +125,8 @@ export class PreviewPlayer {
   seek(outMs: number, keepPlaying = true) {
     const loc = locate(this.project.clips, outMs);
     this.clipIndex = loc.index;
-    this.outMs = loc.clipStartOut + (loc.sourceMs - loc.clip.start);
+    this.outMs = toOutput(this.project.clips, loc.index, loc.sourceMs);
+    this.applyRate();
     const s = loc.sourceMs / 1000;
     this.screen.currentTime = s;
     if (this.camera) this.camera.currentTime = s;
@@ -146,6 +155,14 @@ export class PreviewPlayer {
     this.screen.removeEventListener("seeked", this.onSeeked);
     this.screen.removeEventListener("loadeddata", this.onSeeked);
     this.listeners.clear();
+  }
+
+  /** Plays the current clip at its speed (pitch is preserved by the browser). */
+  private applyRate() {
+    const clip = this.project.clips[this.clipIndex];
+    const rate = clip ? clipSpeed(clip) : 1;
+    if (this.screen.playbackRate !== rate) this.screen.playbackRate = rate;
+    if (this.camera && this.camera.playbackRate !== rate) this.camera.playbackRate = rate;
   }
 
   private applyAudio() {
@@ -187,11 +204,11 @@ export class PreviewPlayer {
     }
     const c = this.cursor;
     const srcMs = this.screen.currentTime * 1000;
-    const state = c ? cursorStateAt(c.path, srcMs + this.project.cursor.offsetMs, c.pressed) : null;
+    const state = c?.path ? cursorStateAt(c.path, srcMs + this.project.cursor.offsetMs, c.pressed) : null;
     const z = this.project.zoom;
     // Zoom is paused while editing annotations, so their on-screen positions hold still.
     const cam = z.segments.length && this.mode === "edit" ? zoomAt(z.segments, z.transitionMs, srcMs, c?.follow ?? null) : null;
-    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, state, cam, srcMs);
+    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, state, cam, srcMs, this.backgroundImage);
   }
 
   private loop = () => {
@@ -208,6 +225,7 @@ export class PreviewPlayer {
         this.screen.currentTime = next.start / 1000;
         if (this.camera) this.camera.currentTime = next.start / 1000;
         this.outMs = clipOffsets(clips)[this.clipIndex];
+        this.applyRate();
       } else {
         this.outMs = totalDuration(clips);
         this.draw();
@@ -215,7 +233,7 @@ export class PreviewPlayer {
         return;
       }
     } else if (srcMs >= clip.start - 50) {
-      this.outMs = clipOffsets(clips)[this.clipIndex] + Math.max(0, srcMs - clip.start);
+      this.outMs = toOutput(clips, this.clipIndex, srcMs);
     }
 
     if (this.camera && Math.abs(this.camera.currentTime - this.screen.currentTime) > 0.12) {

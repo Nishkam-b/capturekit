@@ -201,11 +201,28 @@ into a chat or document app; check the device frame on a portrait phone screensh
 | Static export (`out/`), optional `BASE_PATH`, dependency-free static server (`npm start`) | ✅ | the full suite (106 tests) runs against the static build |
 | Content-Security-Policy (production) blocking other origins; no outside requests while browsing | ✅ | `privacy.spec.ts` |
 | Performance review | ✅ | ~1 MB of uncompressed JS across all routes, largest chunk 229 KB (React/Next); three runtime dependencies; recording no longer holds video in memory |
-| CI workflow (lint, typecheck, unit, build, Chrome e2e under xvfb) | 🧪 | written; **not run yet** (needs the GitHub repository) |
-| GitHub Pages deploy workflow | 🧪 | written; needs the repo and Pages enabled |
+| CI workflow (lint, typecheck, unit, build, Chrome e2e under xvfb) | ✅ | green on GitHub Actions |
+| GitHub Pages deploy workflow | ✅ | live at https://nishtek.in/capturekit/ |
 | Issue/PR templates, Dependabot | ✅ | `.github/` |
 | Docs: README (with real screenshots), user guide, deployment, testing + manual checklist, release process | ✅ | `docs/` |
-| Create the GitHub repository, push, enable Pages | ⬜ | **waiting on the owner** (account, repository name, public/private) |
+| Create the GitHub repository, push, enable Pages | ✅ | github.com/Nishkam-b/capturekit |
 | Tag v0.8.0 and publish a GitHub release | ⬜ | after the push |
 | v1.0 | ⬜ | after the manual release checklist ([docs/TESTING.md](docs/TESTING.md)) |
 | Desktop-wide cursor telemetry | ⛔ | needs a native (Tauri) companion: next roadmap item |
+
+## Phase 8 — Automatic zoom for all recordings, extension download, editor features (v0.9.0)
+| Task | Status | Evidence |
+|---|---|---|
+| Screen-activity analysis engine (frame differences → pseudo cursor events) | ✅ | `tests/unit/activity.spec.ts` (static, dialog, typing, moving cursor, animation, full-screen change) |
+| Editor runs it automatically for recordings without cursor data; auto zoom on by default | ✅ | `zoom.spec.ts` (real recording: analysis finishes, estimated auto zoom shown) |
+| "Zoom in here" button, Alt+Shift+Z, extension command | ✅ | `features.spec.ts`, `tests/unit/markers.spec.ts`; extension command not covered by automated tests |
+| Extension zip + icons built by `scripts/build-extension.mjs`; 3-step install | ✅ | `features.spec.ts` downloads and checks the zip |
+| Chrome Web Store / Edge Add-ons listing | ⬜ | needs the owner's developer account ([docs/EXTENSION_STORE.md](docs/EXTENSION_STORE.md)) |
+| Speed regions | ✅ | unit + `features.spec.ts` |
+| Cursor styles, bounce, motion blur, sway | ✅ | unit (bounce); visual check pending in the manual checklist |
+| Wallpapers, image background, blurred video, background blur | ✅ | build + manual check pending |
+| Webcam roundness, margin, shrink on zoom | ✅ | unit |
+| GIF export | ✅ | unit (encoder) + `features.spec.ts` (decodes at the chosen size) |
+| Import video; `.capturekit` project files | ✅ | `features.spec.ts` round trip |
+| Shortcut reference, FAQ, privacy policy, terms, footer | ✅ | `features.spec.ts` |
+| Image annotations, extra audio tracks | ⬜ | next |

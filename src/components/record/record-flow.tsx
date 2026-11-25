@@ -22,7 +22,7 @@ import { createId, extensionForMime, formatDuration, toFileStem, defaultRecordin
 import { deleteRecording } from "@/engines/storage/db";
 import { StorageSink, lockName } from "@/engines/storage/recording-store";
 import { AUTO_STOP_SECONDS, LOW_SPACE_SECONDS, expectedBytesPerSecond, freeBytes, secondsLeft } from "@/lib/storage-budget";
-import { ExtensionCursorProvider, detectExtension } from "@/engines/cursor/extension-provider";
+import { ExtensionCursorProvider, detectExtension, onExtensionZoomMarker } from "@/engines/cursor/extension-provider";
 import { CursorRecorder } from "@/lib/cursor-recorder";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { persistSession, type CapturedScreenshot } from "@/lib/save-recording";
@@ -82,6 +82,8 @@ export function RecordFlow() {
   const providerRef = useRef<ExtensionCursorProvider | null>(null);
   const cursorRecRef = useRef<CursorRecorder | null>(null);
   const startedAt = useRef<Date | null>(null);
+  const zoomMarkersRef = useRef<number[]>([]);
+  const [zoomMarkerCount, setZoomMarkerCount] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -294,6 +296,8 @@ export function RecordFlow() {
     setShotCount(0);
     setMicMuted(false);
     startedAt.current = new Date();
+    zoomMarkersRef.current = [];
+    setZoomMarkerCount(0);
     setSession(s);
     setSessionState(s.state);
     setStarting(false);
@@ -443,6 +447,7 @@ export function RecordFlow() {
             memoryShots: shotFallback.current,
             startedAt: startedAt.current ?? new Date(),
             cursor,
+            zoomMarkers: zoomMarkersRef.current,
           });
           release();
           // If the user navigated away mid-recording we still save, but don't redirect them.
@@ -534,6 +539,22 @@ export function RecordFlow() {
     }
   }, [session]);
 
+  /** "Zoom here" marks: become manual zoom segments in the editor. */
+  const addZoomMarker = useCallback(() => {
+    if (!session || session.state !== "recording") return;
+    const atMs = Math.round(session.elapsedMs());
+    const list = zoomMarkersRef.current;
+    if (list.length && atMs - list[list.length - 1] < 400) return; // same press seen twice (page + extension)
+    list.push(atMs);
+    setZoomMarkerCount(list.length);
+  }, [session]);
+
+  // The extension's browser-wide shortcut (works while another tab has focus).
+  useEffect(() => {
+    if (phase !== "recording") return;
+    return onExtensionZoomMarker(addZoomMarker);
+  }, [phase, addZoomMarker]);
+
   // ---- Keyboard shortcuts (work in this tab and in the pop-out controls window).
   useEffect(() => {
     if (phase !== "recording" || !session) return;
@@ -548,12 +569,15 @@ export function RecordFlow() {
       } else if (e.code === "KeyC") {
         e.preventDefault();
         void takeScreenshot();
+      } else if (e.code === "KeyZ") {
+        e.preventDefault();
+        addZoomMarker();
       }
     };
     const targets = [window, pipWindow].filter((w): w is Window => !!w);
     targets.forEach((t) => t.addEventListener("keydown", onKey));
     return () => targets.forEach((t) => t.removeEventListener("keydown", onKey));
-  }, [phase, session, pipWindow, takeScreenshot]);
+  }, [phase, session, pipWindow, takeScreenshot, addZoomMarker]);
 
   const toggleMic = useCallback(() => {
     if (!session) return;
@@ -580,9 +604,11 @@ export function RecordFlow() {
         onResume: () => session.resume(),
         onStop: () => void session.stop(),
         onScreenshot: () => void takeScreenshot(),
+        onZoomMarker: addZoomMarker,
+        zoomMarkers: zoomMarkerCount,
         onToggleMic: toggleMic,
       },
-    [session, sessionState, elapsed, micMuted, shotCount, takeScreenshot, toggleMic],
+    [session, sessionState, elapsed, micMuted, shotCount, takeScreenshot, toggleMic, addZoomMarker, zoomMarkerCount],
   );
 
   if (!caps) return <div className="p-10 text-sm text-muted">Checking your browser…</div>;

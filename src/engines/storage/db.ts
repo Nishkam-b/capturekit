@@ -13,7 +13,7 @@ export const PENDING = "pending";
 export const CURSOR = "cursor";
 export const SCREENSHOTS = "screenshots";
 
-export type MediaKind = "screen" | "camera" | "thumb" | "image" | `shot/${string}`;
+export type MediaKind = "screen" | "camera" | "thumb" | "image" | "background" | `shot/${string}`;
 
 interface MediaRecord {
   key: string;
@@ -151,6 +151,14 @@ export async function getMedia(id: string, kind: MediaKind): Promise<Blob | null
   const db = await openDb();
   const rec = (await request(db.transaction(MEDIA).objectStore(MEDIA).get(mediaKey(id, kind)))) as MediaRecord | undefined;
   return rec?.blob ?? null;
+}
+
+/** Stores (or replaces) one media blob of a recording, e.g. an uploaded editor background. */
+export async function saveMedia(recordingId: string, kind: MediaKind, blob: Blob): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(MEDIA, "readwrite");
+  tx.objectStore(MEDIA).put({ key: mediaKey(recordingId, kind), recordingId, blob } satisfies MediaRecord);
+  await done(tx);
 }
 
 export async function deleteRecording(id: string): Promise<void> {

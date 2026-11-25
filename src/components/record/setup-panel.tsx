@@ -159,7 +159,7 @@ export function SetupPanel(p: SetupPanelProps) {
                     <Badge>Tabs only</Badge>
                   ) : (
                     <Link href="/help#cursor-extension" className="text-xs font-semibold text-primary-strong hover:underline">
-                      How to install
+                      Get extension
                     </Link>
                   )}
                 </span>
@@ -354,9 +354,9 @@ function formatMinutes(min: number): string {
 
 function cursorText(surface: DisplaySurfaceHint, ext: string | null | undefined): string {
   if (surface !== "browser") {
-    return "Browsers don't share cursor positions for screen or window recordings. Choose Browser tab (with the extension) for cursor effects; desktop support comes later.";
+    return "The system cursor is recorded as part of the video. Automatic zoom finds the action in the editor; press Alt+Shift+Z while recording to add your own zooms.";
   }
   if (ext === undefined) return "Checking for the CaptureKit extension…";
   if (ext) return "Cursor moves and clicks in the shared tab are recorded for cursor effects. Tab recordings don't show the cursor otherwise.";
-  return "Optional: the CaptureKit browser extension records cursor moves and clicks for cursor effects. Tab recordings don't show the cursor otherwise.";
+  return "Optional: tab recordings don't show the cursor. The CaptureKit extension records it for cursor effects and precise zoom. Automatic zoom works either way.";
 }

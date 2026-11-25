@@ -17,6 +17,8 @@ under a virtual display on Linux. **The CI workflow hasn't run yet**; check its 
 test "records cursor moves and clicks…" failed once in about 12 runs. It passes reliably on its own (5/5). The likely
 cause is fake-UI capture picking up another open browser window. If it fails, rerun `npm run test:extension` on its own.
 
+On a busy Windows desktop, running Chrome and Edge e2e together has once ended with several tests failing with "Target page, context or browser has been closed" (the browser windows were closed mid-test, no assertion failed). The same specs passed when rerun per browser. Close other browser automation windows before a full run.
+
 ### What automation can't prove
 
 - **Which source gets recorded.** With `--use-fake-ui-for-media-stream`, Chromium records a source of the

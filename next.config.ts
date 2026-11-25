@@ -12,6 +12,7 @@ const basePath = (process.env.BASE_PATH ?? "").replace(/\/$/, "");
 const nextConfig: NextConfig = {
   output: "export",
   basePath: basePath || undefined,
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
   trailingSlash: false,
   turbopack: {
     rules: {

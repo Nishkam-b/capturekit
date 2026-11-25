@@ -44,10 +44,17 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await page.getByRole("link", { name: /Edit & export/ }).click();
   await expect(page.getByTestId("clip-0")).toBeVisible();
 
-  // No telemetry: the Zoom panel explains auto zoom isn't available.
+  // No cursor data: the editor analyses the video itself for automatic zoom.
   await page.getByRole("button", { name: "Zoom", exact: true }).click();
-  await expect(page.getByText(/Automatic zoom needs cursor data/)).toBeVisible();
-  await expect(page.getByRole("switch", { name: "Auto zoom" })).toHaveCount(0);
+  await expect(page.getByTestId("activity-analysis")).toHaveCount(0, { timeout: 60_000 });
+  const autoSwitch = page.getByRole("switch", { name: "Auto zoom" });
+  if (await autoSwitch.count()) {
+    await expect(page.getByText("Based on screen activity (estimated)", { exact: false })).toBeVisible();
+    // This test is about manual zooms: turn automatic ones off.
+    if ((await autoSwitch.getAttribute("aria-checked")) === "true") await autoSwitch.click();
+  } else {
+    await expect(page.getByText(/No on-screen activity was found/)).toBeVisible();
+  }
 
   // Frame at a moment that will be inside the zoom, before adding it.
   await seekFraction(page, 0.4);

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Camera, HardDrive, Mic, Monitor, MousePointer2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { Card } from "@/components/ui";
+import { ExtensionInstall } from "@/components/extension-install";
 
-export const metadata: Metadata = { title: "Help & privacy" };
+export const metadata: Metadata = { title: "Help" };
 
 const SUPPORT: [string, string, string, string][] = [
   ["Screen, window or tab", "Yes", "Screen & window", "Screen & window"],
@@ -18,7 +20,7 @@ export default function HelpPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Help &amp; privacy</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Help</h1>
         <p className="mt-1 text-sm text-muted">What CaptureKit can access, where your recordings go, and what browsers support.</p>
       </header>
 
@@ -28,7 +30,7 @@ export default function HelpPage() {
         </h2>
         <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-muted">
           <li>Recording, encoding and saving all happen inside your browser. Nothing is uploaded.</li>
-          <li>No account, no analytics, no tracking.</li>
+          <li>No account, no analytics, no tracking. Read the full <Link href="/privacy" className="font-medium text-primary-strong hover:underline">privacy policy</Link>.</li>
           <li>Recordings are stored in your browser&apos;s local storage (IndexedDB) for this site only.</li>
           <li>Clearing this site&apos;s data in your browser settings deletes your recordings — download anything you want to keep.</li>
           <li>
@@ -95,8 +97,9 @@ export default function HelpPage() {
           <li><kbd className="font-semibold text-ink">Alt+Shift+P</kbd> pause or resume</li>
           <li><kbd className="font-semibold text-ink">Alt+Shift+S</kbd> stop and save</li>
           <li><kbd className="font-semibold text-ink">Alt+Shift+C</kbd> take a screenshot</li>
+          <li><kbd className="font-semibold text-ink">Alt+Shift+Z</kbd> zoom in here (adds a zoom at this moment)</li>
         </ul>
-        <p className="mt-2 text-xs text-muted">They work when the CaptureKit tab or its pop-out controls are focused. Web pages can&apos;t register system-wide shortcuts, so they don&apos;t work while another app is focused.</p>
+        <p className="mt-2 text-xs text-muted">They work when the CaptureKit tab or its pop-out controls are focused. With the extension installed, Alt+Shift+Z also works from any Chrome or Edge tab. Web pages can&apos;t register system-wide shortcuts, so they don&apos;t work while another app is focused.</p>
       </section>
 
       <section id="cursor-extension" className="scroll-mt-6">
@@ -104,29 +107,20 @@ export default function HelpPage() {
           <MousePointer2 className="size-5" /> Cursor tracking (browser extension)
         </h2>
         <p className="text-sm text-muted">
-          Browsers don&apos;t tell web apps where your cursor is during screen recording. Recordings of a <b>browser tab</b>{" "}
-          don&apos;t show the cursor at all. The optional CaptureKit extension records cursor moves and clicks in the tab
-          you share, so the editor can draw a cursor, highlight and click effects, and zoom in automatically around your clicks.
+          <b className="text-ink">Optional.</b> Automatic zoom already works without it: the editor finds where the action
+          is from the video itself. The extension adds exact cursor data for <b className="text-ink">browser-tab</b> recordings
+          (which browsers record without a cursor), so the editor can draw a cursor with click effects and zoom precisely
+          where you click. It also makes Alt+Shift+Z work from any tab.
         </p>
-        <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted">
-          <li>
-            Get the <code className="rounded bg-subtle px-1">extension</code> folder from the CaptureKit source code.
-          </li>
-          <li>
-            Open <code className="rounded bg-subtle px-1">chrome://extensions</code> (or <code className="rounded bg-subtle px-1">edge://extensions</code>) and turn on <b>Developer mode</b>.
-          </li>
-          <li>
-            Click <b>Load unpacked</b>, choose the folder, then reload this page.
-          </li>
-          <li>
-            Choose <b>Browser tab</b> when recording. The setup screen shows &quot;Extension connected&quot;.
-          </li>
-        </ol>
+        <ExtensionInstall />
+        <p className="mt-3 text-xs text-muted">
+          Chrome only installs extensions with one click from the Chrome Web Store; until CaptureKit is listed there, this is
+          the quickest way. Choose <b>Browser tab</b> when recording and the setup screen shows &quot;Extension connected&quot;.
+        </p>
         <p className="mt-3 text-sm text-muted">
           <b className="text-ink">Privacy:</b> the extension stays idle until you start a tab recording. It then reports only
-          pointer positions and clicks in the shared tab, only to this CaptureKit tab, and never over the network. It works in
-          Chrome and Edge 116+. Screen and window recordings need the planned desktop app, and pointer movement inside embedded
-          cross-origin frames isn&apos;t seen.
+          pointer positions and clicks in the shared tab, only to this CaptureKit tab, and never over the network. Chrome and
+          Edge 116+. Pointer movement inside embedded cross-origin frames isn&apos;t seen.
         </p>
       </section>
     </div>
