@@ -451,7 +451,8 @@ export function RecordFlow() {
           });
           release();
           // If the user navigated away mid-recording we still save, but don't redirect them.
-          if (mounted.current) router.push(`/recordings/view?id=${encodeURIComponent(id)}`);
+          // Straight into the editor: zooms, background and framing are applied automatically.
+          if (mounted.current) router.push(`/editor?id=${encodeURIComponent(id)}&new=1`);
         } catch (err) {
           release(); // chunks stay in storage and can be recovered from the dashboard
           if (!mounted.current) return;

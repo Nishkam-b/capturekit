@@ -11,6 +11,7 @@ import type { WebcamStyle } from "@/engines/editor/webcam";
 import { Droplets, ImagePlus, Music } from "lucide-react";
 import type { AudioTrack } from "@/engines/editor/audio-tracks";
 import { CURSOR_THEMES } from "@/engines/cursor/render";
+import type { TelemetrySource } from "@/engines/cursor/types";
 import { Button, Toggle, cx } from "../ui";
 
 export type Tool = "trim" | "crop" | "background" | "webcam" | "cursor" | "zoom" | "annotate" | "audio";
@@ -75,7 +76,7 @@ interface PanelProps {
   cursorEvents: number;
   /** Events driving automatic zoom (precise cursor data or estimated screen activity). */
   zoomEvents: number;
-  zoomSource: "extension" | "native" | "video" | null;
+  zoomSource: TelemetrySource | null;
   /** Screen-activity analysis in progress (0..1), or its error. */
   analysis: { progress: number; error?: string } | null;
   updateZoom: (patch: Partial<ZoomSettings>, opts?: { transient?: boolean; regenerate?: boolean }) => void;
@@ -515,25 +516,87 @@ function AudioPanel({ project, update, live, liveStart, liveEnd, hasAudio, addAu
 
 const CURSOR_COLORS = ["#facc15", "#10b981", "#38bdf8", "#f472b6", "#ffffff"];
 
-function CursorPanel({ project, update, live, liveStart, liveEnd, cursorEvents }: PanelProps) {
+function CursorPanel({ project, update, live, liveStart, liveEnd, cursorEvents, zoomSource, analysis }: PanelProps) {
   if (cursorEvents === 0) {
     return (
       <Section title="Cursor">
-        <p className="text-sm text-muted">This recording has no cursor data.</p>
-        <p className="mt-2 text-xs text-muted">
-          Browsers don&apos;t share where the cursor is during screen recording. To get cursor effects, install the CaptureKit
-          browser extension and record a <b>browser tab</b>. Screen and window recordings will get cursor data with the planned
-          desktop app.
-        </p>
-        <a href="/help#cursor-extension" className="mt-3 inline-block text-xs font-semibold text-primary-strong hover:underline">
-          How to install the extension
-        </a>
+        {analysis && !analysis.error ? (
+          <p className="text-sm text-muted">Looking for your cursor in the recording… {Math.round(analysis.progress * 100)}%</p>
+        ) : (
+          <>
+            <p className="text-sm text-muted">No cursor was found in this recording.</p>
+            <p className="mt-2 text-xs text-muted">
+              Browser-tab recordings don&apos;t include the mouse pointer. Record your <b>entire screen</b> or a <b>window</b> and
+              CaptureKit finds the cursor in the video for click effects and click-based zoom.
+            </p>
+          </>
+        )}
       </Section>
     );
   }
+  const inVideo = zoomSource === "video-cursor";
   const c = project.cursor;
   const set = (patch: Partial<typeof c>) => update({ cursor: { ...c, ...patch } });
   const setLive = (patch: Partial<typeof c>) => live({ cursor: { ...c, ...patch } });
+  return (
+    <>
+      {inVideo ? (
+        <Section title="Cursor" hint="Found in your video, so it already shows your real pointer. Add a highlight or click effects around it.">
+          <p className="text-xs text-muted">Clicks are recognised when the cursor stops and the screen reacts next to it.</p>
+        </Section>
+      ) : (
+        <PointerSections c={c} set={set} setLive={setLive} liveStart={liveStart} liveEnd={liveEnd} cursorEvents={cursorEvents} />
+      )}
+      <Section title="Highlight">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-medium text-muted">Circle behind cursor</span>
+          <Toggle label="Cursor highlight" checked={c.highlight.enabled} onChange={(enabled) => set({ highlight: { ...c.highlight, enabled } })} />
+        </div>
+        <div className={cx(!c.highlight.enabled && "pointer-events-none opacity-50")}>
+          <ColorRow label="Highlight colour" value={c.highlight.color} onPick={(color) => set({ highlight: { ...c.highlight, color } })} />
+          <Slider label="Highlight size" value={c.highlight.size} min={1} max={4} step={0.1} format={(v) => `${v.toFixed(1)}×`} onChange={(size) => setLive({ highlight: { ...c.highlight, size } })} onStart={liveStart} onEnd={liveEnd} />
+          <Slider label="Highlight opacity" value={c.highlight.opacity} min={0.1} max={0.8} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(opacity) => setLive({ highlight: { ...c.highlight, opacity } })} onStart={liveStart} onEnd={liveEnd} />
+        </div>
+      </Section>
+      <Section title="Clicks">
+        <Chips
+          label="Click effect"
+          value={c.click.style}
+          options={[
+            ["ripple", "Ripple"],
+            ["none", "None"],
+          ]}
+          onPick={(style) => set({ click: { ...c.click, style } })}
+        />
+        <div className={cx("mt-3", c.click.style === "none" && "pointer-events-none opacity-50")}>
+          <ColorRow label="Click colour" value={c.click.color} onPick={(color) => set({ click: { ...c.click, color } })} />
+        </div>
+      </Section>
+      {!inVideo && (
+        <Section title="Sync" hint="Nudge the cursor if it looks slightly ahead of or behind the video.">
+        <Slider label="Cursor timing" value={c.offsetMs} min={-500} max={500} step={10} format={(v) => `${v > 0 ? "+" : ""}${v} ms`} onChange={(offsetMs) => setLive({ offsetMs })} onStart={liveStart} onEnd={liveEnd} />
+        </Section>
+      )}
+    </>
+  );
+}
+
+type CursorStyleT = EditProject["cursor"];
+function PointerSections({
+  c,
+  set,
+  setLive,
+  liveStart,
+  liveEnd,
+  cursorEvents,
+}: {
+  c: CursorStyleT;
+  set: (patch: Partial<CursorStyleT>) => void;
+  setLive: (patch: Partial<CursorStyleT>) => void;
+  liveStart: () => void;
+  liveEnd: () => void;
+  cursorEvents: number;
+}) {
   return (
     <>
       <Section title="Cursor" hint={`${cursorEvents.toLocaleString()} cursor events recorded in the shared tab.`}>
@@ -562,34 +625,6 @@ function CursorPanel({ project, update, live, liveStart, liveEnd, cursorEvents }
           <span className="text-xs font-medium text-muted">Sway while moving</span>
           <Toggle label="Sway while moving" checked={c.sway} onChange={(sway) => set({ sway })} />
         </div>
-      </Section>
-      <Section title="Highlight">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Circle behind cursor</span>
-          <Toggle label="Cursor highlight" checked={c.highlight.enabled} onChange={(enabled) => set({ highlight: { ...c.highlight, enabled } })} />
-        </div>
-        <div className={cx(!c.highlight.enabled && "pointer-events-none opacity-50")}>
-          <ColorRow label="Highlight colour" value={c.highlight.color} onPick={(color) => set({ highlight: { ...c.highlight, color } })} />
-          <Slider label="Highlight size" value={c.highlight.size} min={1} max={4} step={0.1} format={(v) => `${v.toFixed(1)}×`} onChange={(size) => setLive({ highlight: { ...c.highlight, size } })} onStart={liveStart} onEnd={liveEnd} />
-          <Slider label="Highlight opacity" value={c.highlight.opacity} min={0.1} max={0.8} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(opacity) => setLive({ highlight: { ...c.highlight, opacity } })} onStart={liveStart} onEnd={liveEnd} />
-        </div>
-      </Section>
-      <Section title="Clicks">
-        <Chips
-          label="Click effect"
-          value={c.click.style}
-          options={[
-            ["ripple", "Ripple"],
-            ["none", "None"],
-          ]}
-          onPick={(style) => set({ click: { ...c.click, style } })}
-        />
-        <div className={cx("mt-3", c.click.style === "none" && "pointer-events-none opacity-50")}>
-          <ColorRow label="Click colour" value={c.click.color} onPick={(color) => set({ click: { ...c.click, color } })} />
-        </div>
-      </Section>
-      <Section title="Sync" hint="Nudge the cursor if it looks slightly ahead of or behind the video.">
-        <Slider label="Cursor timing" value={c.offsetMs} min={-500} max={500} step={10} format={(v) => `${v > 0 ? "+" : ""}${v} ms`} onChange={(offsetMs) => setLive({ offsetMs })} onStart={liveStart} onEnd={liveEnd} />
       </Section>
     </>
   );
@@ -622,7 +657,8 @@ const LEVEL_OPTIONS: [string, string][] = ZOOM_LEVELS.map((l) => [String(l), `${
 function ZoomPanel(p: PanelProps) {
   const z = p.project.zoom;
   const hasTelemetry = p.zoomEvents > 0;
-  const estimated = p.zoomSource === "video";
+  const estimated = p.zoomSource === "video-activity";
+  const fromCursor = p.zoomSource === "video-cursor";
   const selected = z.segments.find((s) => s.id === p.selectedZoomId) ?? null;
   const regen = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true });
   const regenLive = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true, transient: true });
@@ -634,14 +670,16 @@ function ZoomPanel(p: PanelProps) {
         hint={
           hasTelemetry
             ? estimated
-              ? "Based on screen activity (estimated): zooms in where dialogs, menus and typing appear, and follows the action."
-              : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and follows the cursor."
+              ? "Based on screen activity (estimated): this recording has no visible cursor, so zooms go where dialogs, menus and typing appear."
+              : fromCursor
+                ? "Based on your cursor: zooms in as you move to each click (fully in before you click), follows the cursor, and zooms out when you're done."
+                : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and follows the cursor."
             : undefined
         }
       >
         {p.analysis && !p.analysis.error ? (
           <div data-testid="activity-analysis">
-            <p className="mb-2 text-xs text-muted">Finding where the action is… {pct}%</p>
+            <p className="mb-2 text-xs text-muted">Finding your cursor and clicks… {pct}%</p>
             <div
               className="h-1.5 overflow-hidden rounded-full bg-line"
               role="progressbar"
@@ -681,7 +719,7 @@ function ZoomPanel(p: PanelProps) {
               onEnd={p.liveEnd}
             />
             {estimated && (
-              <p className="mt-2 text-[11px] text-faint">For zooms that follow the exact pointer, record a tab with the CaptureKit extension.</p>
+              <p className="mt-2 text-[11px] text-faint">For click-based zoom, record your entire screen or a window: browser tabs don&apos;t include the cursor.</p>
             )}
           </>
         )}

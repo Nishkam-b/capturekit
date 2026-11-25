@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { chromium, expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { landOnRecording } from "../e2e/helpers";
 
 /**
  * Cursor tracking end-to-end with the real unpacked extension.
@@ -80,7 +81,7 @@ test("records cursor moves and clicks in a shared tab and renders them in the ed
   await app.waitForTimeout(800);
 
   await app.getByRole("button", { name: "Stop recording" }).first().click();
-  await app.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(app);
   await expect(app.getByText("Cursor data")).toBeVisible();
 
   const flat = (await storedCursor(app))!;
@@ -131,8 +132,8 @@ test("screen recordings explain the cursor is in the video and auto zoom comes f
   const app = await ctx.newPage();
   await app.goto(`${BASE}/record`);
   await app.getByRole("radio", { name: /Entire screen/ }).click();
-  await expect(app.getByTestId("cursor-extension-status")).toHaveText("Tabs only");
-  await expect(app.getByText(/The system cursor is recorded as part of the video/)).toBeVisible();
+  await expect(app.getByTestId("cursor-extension-status")).toHaveText("Follows clicks");
+  await expect(app.getByText(/Your cursor is part of the video/)).toBeVisible();
 });
 
 async function storedZoomSegments(page: Page): Promise<Array<{ auto: boolean; mode: string; start: number; end: number }>> {
@@ -182,7 +183,7 @@ test("auto zoom: clicks create follow zooms; toggling, deleting and regenerating
   await app.mouse.up();
   await app.waitForTimeout(2500);
   await app.getByRole("button", { name: "Stop recording" }).first().click();
-  await app.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(app);
 
   await app.getByRole("link", { name: /Edit & export/ }).click();
   await expect(app.getByTestId("clip-0")).toBeVisible();

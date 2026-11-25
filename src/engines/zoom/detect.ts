@@ -10,9 +10,33 @@ export interface DetectOptions {
 }
 
 /** Interactions closer than this (ms) belong to one zoom. */
-export const CLUSTER_GAP_MS = 2500;
+export const CLUSTER_GAP_MS = 3000;
 /** Zooms whose gaps are shorter than this are merged (no quick out-and-in). */
-export const MERGE_GAP_MS = 1200;
+export const MERGE_GAP_MS = 1500;
+/** Fully zoomed in this long before the first click of a zoom (ms). */
+export const LEAD_MS = 250;
+/** The zoom never starts more than this before the click (ms). */
+const MAX_APPROACH_MS = 1600;
+/** "Approaching" = within this distance of the click point (normalised). */
+const APPROACH_RADIUS = 0.2;
+
+/**
+ * When the zoom-in should start for a click at (t, x, y): as the cursor makes its final
+ * approach (enters the area around the click), but always early enough to be fully
+ * zoomed in LEAD_MS before the click.
+ */
+export function approachStart(moves: readonly CursorEvent[], t: number, x: number, y: number, transitionMs: number): number {
+  const latest = t - transitionMs - LEAD_MS;
+  let start = latest;
+  for (let i = moves.length - 1; i >= 0; i--) {
+    const m = moves[i];
+    if (m.t > t) continue;
+    if (m.t < t - MAX_APPROACH_MS) break;
+    if (Math.hypot(m.x - x, m.y - y) > APPROACH_RADIUS) break;
+    start = Math.min(start, m.t);
+  }
+  return Math.max(t - MAX_APPROACH_MS, Math.min(start, latest));
+}
 /** A pause after movement counts as an interaction when it lasts this long. */
 export const DWELL_MS = 1000;
 /** Movement needed before a pause counts (normalised distance). */
@@ -65,12 +89,13 @@ export function detectZoomSegments(events: readonly CursorEvent[], o: DetectOpti
     else clusters.push([p]);
   }
 
-  // 2. Segments: fully zoomed by the first interaction, hold after the last.
+  // 2. Segments: zoom in during the approach (fully in just before the first click), hold after the last.
+  const moves = [...events].filter((e) => e.kind === CursorKind.Move).sort((a, b) => a.t - b.t);
   let segs = clusters.map((c) => {
     const first = c[0];
     const last = c[c.length - 1];
     return {
-      start: Math.max(0, first.t - o.transitionMs),
+      start: Math.max(0, approachStart(moves, first.t, first.x, first.y, o.transitionMs)),
       end: Math.min(o.durationMs, last.t + o.holdMs),
       x: c.reduce((s, p) => s + p.x, 0) / c.length,
       y: c.reduce((s, p) => s + p.y, 0) / c.length,

@@ -20,8 +20,15 @@ export interface CursorEvent {
   kind: CursorKind;
 }
 
-/** extension = precise pointer data; native = future desktop companion; video = estimated from on-screen activity. */
-export type TelemetrySource = "extension" | "native" | "video";
+/**
+ * extension = precise pointer data; native = future desktop companion;
+ * video-cursor = cursor found in the video, clicks inferred; video-activity = on-screen changes only;
+ * video = v0.9–0.10 activity analysis (re-analysed on open).
+ */
+export type TelemetrySource = "extension" | "native" | "video-cursor" | "video-activity" | "video";
+
+/** Sources whose positions are where the pointer really was. */
+export const isPointerSource = (s: TelemetrySource | null) => s === "extension" || s === "native" || s === "video-cursor";
 
 export interface CursorTrack {
   recordingId: string;

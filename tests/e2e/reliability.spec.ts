@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { FAKE_MEDIA, timerMs } from "./helpers";
+import { FAKE_MEDIA, landOnRecording, timerMs } from "./helpers";
 
 test.use({ launchOptions: { args: [...FAKE_MEDIA, "--auto-select-desktop-capture-source=Entire screen"] } });
 test.setTimeout(120_000);
@@ -66,7 +66,7 @@ test("chunks are saved while recording and finalised on stop", async ({ page }) 
   expect(await count(page, "pending")).toBe(1);
   expect(await count(page, "chunks")).toBeGreaterThanOrEqual(2);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
-  await page.waitForURL(/\/recordings\/view\?id=/);
+  await landOnRecording(page);
   expect(await count(page, "pending")).toBe(0);
   expect(await count(page, "chunks")).toBeGreaterThanOrEqual(3);
   expect(await count(page, "recordings")).toBe(1);
@@ -140,7 +140,7 @@ test("keyboard shortcuts pause, screenshot and stop", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Take screenshot" }).first()).toContainText("1");
   await page.waitForTimeout(1000);
   await page.keyboard.press("Alt+Shift+S");
-  await page.waitForURL(/\/recordings\/view\?id=/);
+  await landOnRecording(page);
   await expect(page.getByText("Screenshots (1)")).toBeVisible();
 });
 
@@ -160,7 +160,7 @@ test("recording stops itself and saves when storage runs out", async ({ page }) 
   await mockQuota(page, 50 * 1024 * 1024 * 1024);
   await startRecording(page);
   await setQuota(page, 1024 * 1024);
-  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 20_000 });
+  await landOnRecording(page, 20_000);
   await expect(page.getByText(/stopped automatically because browser storage was almost full/).first()).toBeVisible();
   const warnings = await storedWarnings(page);
   expect(warnings.filter((w) => w.includes("stopped automatically"))).toHaveLength(1);

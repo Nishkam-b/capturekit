@@ -23,19 +23,21 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Do I need to install anything?",
     a: (
       <>
-        No. Open the site in Chrome or Edge and press Record. Automatic zoom works out of the box. The optional{" "}
-        <Link href="/help#cursor-extension">browser extension</Link> adds exact cursor tracking for browser-tab recordings
-        (a drawn cursor, click effects and zooms that follow the pointer precisely).
+        No. Open the site in Chrome or Edge and press Record. When you stop, the editor opens with your video already
+        zoomed in on your clicks and framed, ready to export.
       </>
     ),
   },
   {
-    q: "How does automatic zoom work without the extension?",
+    q: "How does automatic zoom know where I clicked?",
     a: (
       <>
-        When you open a recording in the editor, {site.name} compares its frames on your device to find where things change
-        on screen (menus opening, dialogs, typing) and zooms in there. It ignores constant animations and full-page
-        scrolls. It is an estimate, labelled as such in the editor, and you can move, resize, add or delete any zoom.
+        Screen and window recordings include your mouse pointer, so after recording {site.name} finds the cursor in the
+        video on your device. A click is when the cursor arrives somewhere, stops, and the screen reacts right next to it
+        (a menu opens, a dialog appears, a page changes). Each zoom starts as you move toward the click, is fully in before
+        you click, follows the cursor, and zooms out when you&apos;re done. Clicks close together share one zoom. You can
+        move, resize, add or delete any zoom. Browser-tab recordings don&apos;t include the pointer, so there zooms follow
+        on-screen changes instead.
       </>
     ),
   },
@@ -43,8 +45,8 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Can I choose where it zooms while recording?",
     a: (
       <>
-        Yes. Press the zoom button in the recording controls, or <b>Alt+Shift+Z</b>. With the extension installed, the
-        shortcut works from any Chrome tab. Each mark becomes a zoom you can adjust in the editor.
+        Yes. Press the zoom button in the recording controls, or <b>Alt+Shift+Z</b> while the CaptureKit tab or its pop-out
+        controls are focused. Each mark becomes a zoom you can adjust in the editor.
       </>
     ),
   },
@@ -52,9 +54,8 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Why doesn't my cursor show in a tab recording?",
     a: (
       <>
-        Browsers leave the cursor out of tab recordings and don&apos;t tell web apps where it is. Screen and window
-        recordings include the cursor as the system draws it. For tab recordings, install the extension and the editor
-        draws a cursor you can style.
+        Browsers leave the pointer out of tab recordings. Choose <b>Entire screen</b> or <b>Window</b> instead (the
+        default): the pointer is recorded, and the editor uses it for click-based zoom and click effects.
       </>
     ),
   },
@@ -115,15 +116,6 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
       <>
         In your browser&apos;s storage for this site, on this device only. They don&apos;t sync between browsers or
         devices. Clearing this site&apos;s data deletes them, so download anything you want to keep.
-      </>
-    ),
-  },
-  {
-    q: "Is the extension safe?",
-    a: (
-      <>
-        It stays idle until you start a tab recording, then reports only pointer positions and clicks in the shared tab, to
-        your {site.name} tab, never over the network. Its source code is public and short enough to read in a few minutes.
       </>
     ),
   },

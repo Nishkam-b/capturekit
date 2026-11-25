@@ -2,6 +2,25 @@
 
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] — 2026-11-25 — Click-based auto zoom from the video, finished video after recording
+
+### Added
+- **Cursor detection in the video.** Screen and window recordings include the mouse pointer; the editor now finds it
+  (motion blobs + arrow-template matching, Windows- and macOS-style cursors) and **infers clicks**: the cursor arrives,
+  stops, and the screen reacts next to it. No extension needed.
+- **Zooms with meaning:** one zoom per group of clicks, starting as the cursor approaches the click and fully in
+  250 ms before it, following the cursor, zooming out after. Fewer zooms overall (wider grouping and merging).
+- **Finished video after recording:** stopping opens the editor directly with zooms, a wallpaper background, padding,
+  rounded corners and a shadow already applied, and a "Your video is ready" bar with an Export button.
+- Cursor panel for recordings with a detected cursor: highlight and click effects around the real pointer.
+- Help page section explaining how automatic zoom works.
+
+### Changed
+- No prompts to install the extension: the recording setup shows an "Automatic zoom" status instead, and the extension
+  moved to an "Advanced" section of the Help page (only useful for browser-tab recordings).
+- Recordings analysed by v0.9–v0.10 (screen activity only) are re-analysed with cursor detection when opened.
+- Auto-zoom transition starts during the approach (zoom.spec timing updated).
+
 ## [0.10.0] — 2026-11-25 — Image annotations and music tracks
 
 ### Added

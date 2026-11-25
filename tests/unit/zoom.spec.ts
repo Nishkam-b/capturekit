@@ -28,7 +28,7 @@ test.describe("auto zoom detection", () => {
   test("a click zooms in before it and holds after it", () => {
     const segs = detectZoomSegments([...wander(0, 4000), ...click(5000, 0.2, 0.3)], opts);
     expect(segs).toHaveLength(1);
-    expect(segs[0]).toMatchObject({ start: 4300, end: 6500, level: 2, mode: "follow", auto: true });
+    expect(segs[0]).toMatchObject({ start: 4050, end: 6500, level: 2, mode: "follow", auto: true });
     expect(segs[0].x).toBeCloseTo(0.2);
   });
 
@@ -41,7 +41,7 @@ test.describe("auto zoom detection", () => {
   });
 
   test("zooms with a short gap after zoom-out are merged (no quick out-and-in)", () => {
-    // 5000 → ends 6500 (+700 out = 7200); next starts 9000-700 = 8300 → gap 1100 < 1200 → merge
+    // 5000 → ends 6500 (+700 out = 7200); next starts 9000-950 = 8050 → gap 850 < 1500 → merge
     const segs = detectZoomSegments([...click(5000, 0.2, 0.2), ...click(9000, 0.3, 0.3)], opts);
     expect(segs).toHaveLength(1);
   });

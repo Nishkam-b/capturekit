@@ -60,10 +60,11 @@ in real time (a 5-minute video takes about 5 minutes) and pauses if you switch t
 
 ### Automatic zoom
 
-The first time you open a recording without cursor data, the editor analyses it on your device ("Finding where the
-action is…") and adds zooms where menus, dialogs or typing appear. It ignores constant animations and full-page
-scrolls. This is an estimate; turn it off in the Zoom panel or edit any zoom. Tab recordings made with the extension
-use the exact pointer instead.
+When you stop recording, the editor opens and finds your mouse pointer in the video ("Finding your cursor and
+clicks…"). A click is the cursor arriving somewhere, stopping, and the screen reacting next to it. Each zoom starts as
+you move toward the click, is fully in before you click, follows the cursor and zooms out afterwards; nearby clicks
+share one zoom. Record the **entire screen** or a **window** for this (browser-tab recordings don't contain the
+pointer, so zooms there follow on-screen changes). Turn it off in the Zoom panel or edit any zoom.
 
 ### Speed
 

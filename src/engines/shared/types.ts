@@ -47,7 +47,7 @@ export interface RecordingMeta {
   audio: { mic: boolean; system: boolean };
   screenshots: ScreenshotMeta[];
   /** Cursor telemetry recorded alongside (stored separately in the `cursor` store). */
-  cursor?: { source: "extension" | "native" | "video"; events: number } | null;
+  cursor?: { source: "extension" | "native" | "video-cursor" | "video-activity" | "video"; events: number } | null;
   /** Moments (recording time, ms) the user marked "zoom here" while recording. */
   zoomMarkers?: number[];
   warnings: string[];

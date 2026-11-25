@@ -17,6 +17,13 @@ export async function timerMs(page: Page): Promise<number> {
   return (m * 60 + s) * 1000;
 }
 
+/** After stopping, CaptureKit opens the editor; tests that check the saved recording go to its page. */
+export async function landOnRecording(page: Page, timeout = 30_000) {
+  await page.waitForURL(/\/editor\?id=/, { timeout });
+  const id = new URL(page.url()).searchParams.get("id")!;
+  await page.goto(new URL(`/recordings/view?id=${encodeURIComponent(id)}`, page.url()).href);
+}
+
 export async function openTarget(page: Page) {
   const target = await page.context().newPage();
   await target.goto("/help");
@@ -60,7 +67,7 @@ export async function record(
   await page.waitForTimeout(2200);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
 
-  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(page);
 }
 
 export async function checkPreviewAndDownloads(

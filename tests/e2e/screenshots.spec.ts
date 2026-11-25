@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { FAKE_MEDIA } from "./helpers";
+import { FAKE_MEDIA, landOnRecording } from "./helpers";
 
 test.use({ launchOptions: { args: [...FAKE_MEDIA, "--auto-select-desktop-capture-source=Entire screen"] } });
 test.setTimeout(150_000);
@@ -172,7 +172,7 @@ test("open a screenshot taken during a recording in the editor", async ({ page }
   await page.getByRole("button", { name: "Take screenshot" }).first().click();
   await page.waitForTimeout(800);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
-  await page.waitForURL(/\/recordings\/view\?id=/);
+  await landOnRecording(page);
   await page.getByRole("button", { name: "Edit screenshot 1" }).click();
   await page.waitForURL(/\/screenshots\/edit\?id=/);
   const s = await storedShot(page);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import Link from "next/link";
 import { AppWindow, Camera, Globe, Info, LoaderCircle, Mic, Monitor, MousePointer2, Timer, Volume2 } from "lucide-react";
 import { createLevelMeter, type DeviceLists, type RecorderCapabilities } from "@/engines/recorder";
 import type { DisplaySurfaceHint, WebcamPosition, WebcamShape, WebcamSize } from "@/engines/shared/types";
@@ -147,20 +146,16 @@ export function SetupPanel(p: SetupPanelProps) {
 
             <OptionRow
               icon={<MousePointer2 className="size-5" />}
-              title="Cursor tracking"
+              title="Automatic zoom"
               text={cursorText(prefs.surface, p.cursorExtension)}
               control={
                 <span data-testid="cursor-extension-status">
-                  {p.cursorExtension === undefined ? (
-                    <Badge>Checking…</Badge>
-                  ) : p.cursorExtension && prefs.surface === "browser" ? (
+                  {prefs.surface === "browser" && p.cursorExtension ? (
                     <Badge tone="green">Extension connected</Badge>
-                  ) : p.cursorExtension ? (
-                    <Badge>Tabs only</Badge>
+                  ) : prefs.surface === "browser" ? (
+                    <Badge>Activity-based</Badge>
                   ) : (
-                    <Link href="/help#cursor-extension" className="text-xs font-semibold text-primary-strong hover:underline">
-                      Get extension
-                    </Link>
+                    <Badge tone="green">Follows clicks</Badge>
                   )}
                 </span>
               }
@@ -354,9 +349,8 @@ function formatMinutes(min: number): string {
 
 function cursorText(surface: DisplaySurfaceHint, ext: string | null | undefined): string {
   if (surface !== "browser") {
-    return "The system cursor is recorded as part of the video. Automatic zoom finds the action in the editor; press Alt+Shift+Z while recording to add your own zooms.";
+    return "Your cursor is part of the video. After recording, CaptureKit finds it and zooms in on each click (Alt+Shift+Z adds a zoom by hand).";
   }
-  if (ext === undefined) return "Checking for the CaptureKit extension…";
-  if (ext) return "Cursor moves and clicks in the shared tab are recorded for cursor effects. Tab recordings don't show the cursor otherwise.";
-  return "Optional: tab recordings don't show the cursor. The CaptureKit extension records it for cursor effects and precise zoom. Automatic zoom works either way.";
+  if (ext) return "Cursor moves and clicks in the shared tab are recorded for cursor effects and click-based zoom.";
+  return "Browser tabs are recorded without the mouse pointer, so zooms follow on-screen changes. Choose Entire screen or Window for click-based zoom.";
 }

@@ -48,8 +48,10 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await page.getByRole("button", { name: "Zoom", exact: true }).click();
   await expect(page.getByTestId("activity-analysis")).toHaveCount(0, { timeout: 60_000 });
   const autoSwitch = page.getByRole("switch", { name: "Auto zoom" });
+  // Real screen captures include the OS pointer, which the editor may find in the video.
+  const cursorFound = (await page.getByText(/Based on your cursor/).count()) > 0;
   if (await autoSwitch.count()) {
-    await expect(page.getByText("Based on screen activity (estimated)", { exact: false })).toBeVisible();
+    if (!cursorFound) await expect(page.getByText("Based on screen activity (estimated)", { exact: false })).toBeVisible();
     // This test is about manual zooms: turn automatic ones off.
     if ((await autoSwitch.getAttribute("aria-checked")) === "true") await autoSwitch.click();
   } else {
@@ -65,7 +67,8 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await waitSaved(page);
   let z = (await storedZoom(page))!;
   expect(z.segments).toHaveLength(1);
-  expect(z.segments[0]).toMatchObject({ level: 2, mode: "fixed", auto: false });
+  // Manual zooms follow the pointer when there is pointer data, otherwise they stay on a fixed point.
+  expect(z.segments[0]).toMatchObject({ level: 2, mode: cursorFound ? "follow" : "fixed", auto: false });
   const seg = z.segments[0];
   expect(seg.end - seg.start).toBeGreaterThan(1000);
 
@@ -74,7 +77,8 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   const zoomed = await frame(page);
   expect(zoomed).not.toBe(before);
 
-  // Pick a focus point in the top-left of the preview.
+  // Pick a focus point in the top-left of the preview (fixed-point zooms only).
+  if (cursorFound) await page.getByRole("radio", { name: /Fixed point/ }).click();
   const canvas = (await page.getByTestId("editor-canvas").boundingBox())!;
   await expect(page.getByText(/Click the preview to choose where to zoom/)).toBeVisible();
   await page.mouse.click(canvas.x + canvas.width * 0.2, canvas.y + canvas.height * 0.25);

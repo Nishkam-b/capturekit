@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { landOnRecording } from "../e2e/helpers";
 
 /**
  * Firefox smoke test (Playwright's Firefox build). Fake camera/mic and the
@@ -27,7 +28,7 @@ test("Firefox: record screen + webcam + mic, preview, download, edit and export"
   await page.getByRole("button", { name: "Take screenshot" }).first().click();
   await page.waitForTimeout(2000);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
-  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(page);
 
   const video = page.getByTestId("preview-video");
   await page.waitForFunction(() => {

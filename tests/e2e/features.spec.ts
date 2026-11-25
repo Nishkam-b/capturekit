@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { FAKE_MEDIA } from "./helpers";
+import { FAKE_MEDIA, landOnRecording } from "./helpers";
 
 test.use({ launchOptions: { args: [...FAKE_MEDIA, "--auto-select-desktop-capture-source=Entire screen"] } });
 test.setTimeout(180_000);
@@ -20,7 +20,7 @@ async function recordWithMarker(page: Page) {
   await expect(page.getByTestId("zoom-marker").first()).toContainText("1");
   await page.waitForTimeout(3500);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
-  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(page);
 }
 
 async function storedRecordingScreen(page: Page): Promise<string> {
@@ -128,6 +128,7 @@ test("help, FAQ, privacy and terms pages, footer credit, and the extension downl
   }
 
   await page.goto("/help");
+  await page.getByText(/Advanced: cursor for browser-tab recordings/).click();
   const dl = page.getByRole("link", { name: "Download the extension" });
   await expect(dl).toBeVisible();
   const href = (await dl.getAttribute("href"))!;
@@ -168,7 +169,7 @@ test("image annotation and a music track: shown in the preview and mixed into th
   await expect(page.getByTestId("timer").first()).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3500);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
-  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await landOnRecording(page);
   await page.getByRole("link", { name: /Edit & export/ }).click();
   await expect(page.getByTestId("clip-0")).toBeVisible();
 
@@ -208,4 +209,102 @@ test("image annotation and a music track: shown in the preview and mixed into th
     return (v as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount ?? -1;
   });
   expect(hasAudio).toBeGreaterThan(0);
+});
+
+test("auto zoom finds the cursor and click in a real encoded video and zooms in before the click", async ({ page }, info) => {
+  await page.goto("/recordings");
+  // Make a 6 s "screen recording": desktop-like UI, an OS-style cursor that moves to a button,
+  // stops, and a menu opens next to it (the click), then moves away. Encoded by the browser like a real recording.
+  const b64 = await page.evaluate(async () => {
+    const W = 1280;
+    const H = 720;
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const g = c.getContext("2d")!;
+    const arrow = (x: number, y: number, h: number) => {
+      const pts = [[0, 0], [0, 0.8], [0.2, 0.62], [0.33, 0.92], [0.45, 0.86], [0.33, 0.58], [0.58, 0.58]];
+      g.beginPath();
+      pts.forEach(([px, py], i) => (i ? g.lineTo(x + px * h, y + py * h) : g.moveTo(x + px * h, y + py * h)));
+      g.closePath();
+      g.fillStyle = "#fff";
+      g.fill();
+      g.lineWidth = 1.5;
+      g.strokeStyle = "#000";
+      g.stroke();
+    };
+    const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.min(1, Math.max(0, k));
+    const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8", videoBitsPerSecond: 4_000_000 });
+    const chunks: Blob[] = [];
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    const done = new Promise((r) => (rec.onstop = r));
+    rec.start(500);
+    const t0 = performance.now();
+    await new Promise<void>((resolve) => {
+      const frame = () => {
+        const t = performance.now() - t0;
+        g.fillStyle = "#eef2f7";
+        g.fillRect(0, 0, W, H);
+        g.fillStyle = "#dde3ea";
+        g.fillRect(0, 0, 240, H);
+        g.fillStyle = "#8a96a6";
+        for (let k = 0; k < 16; k++) g.fillRect(300, 60 + k * 36, 380 + ((k * 97) % 400), 10);
+        g.fillStyle = "#10b981";
+        g.fillRect(780, 380, 140, 40); // the button
+        if (t >= 1900) {
+          g.fillStyle = "#ffffff";
+          g.fillRect(800, 430, 260, 200); // menu
+          g.fillStyle = "#334155";
+          for (let k = 0; k < 5; k++) g.fillRect(820, 450 + k * 34, 180, 10);
+        }
+        const [x, y] =
+          t < 1500 ? [lerp(200, 830, t / 1500), lerp(150, 395, t / 1500)] : t < 3500 ? [830, 395] : [lerp(830, 350, (t - 3500) / 1000), lerp(395, 560, (t - 3500) / 1000)];
+        arrow(x, y, 22);
+        if (t < 6000) requestAnimationFrame(frame);
+        else resolve();
+      };
+      frame();
+    });
+    rec.stop();
+    await done;
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let s = "";
+    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return btoa(s);
+  });
+  await mkdir(info.outputDir, { recursive: true });
+  const file = path.join(info.outputDir, "click demo.webm");
+  await writeFile(file, Buffer.from(b64, "base64"));
+
+  await page.getByTestId("import-video").setInputFiles(file);
+  await page.waitForURL(/\/editor\?id=/, { timeout: 30_000 });
+  await page.getByRole("button", { name: "Zoom", exact: true }).click();
+  await expect(page.getByTestId("activity-analysis")).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByText(/Based on your cursor/)).toBeVisible();
+  await expect(page.getByTestId("zoom-0")).toBeVisible();
+  await expect(page.getByTestId("zoom-1")).toHaveCount(0); // one meaningful zoom, not several
+
+  // The zoom is fully in before the click (~1.5–1.9 s) and starts during the approach.
+  await page.waitForTimeout(800);
+  const id = new URL(page.url()).searchParams.get("id");
+  const seg = await page.evaluate(
+    (rid) =>
+      new Promise<{ start: number; end: number; x: number; y: number }>((resolve, reject) => {
+        const req = indexedDB.open("capturekit");
+        req.onsuccess = () => {
+          const g = req.result.transaction("projects").objectStore("projects").get(rid!);
+          g.onsuccess = () => resolve(g.result.zoom.segments[0]);
+          g.onerror = () => reject(g.error);
+        };
+      }),
+    id,
+  );
+  expect(seg.start + 700).toBeLessThanOrEqual(1950);
+  expect(seg.start).toBeGreaterThan(0);
+  expect(seg.end).toBeGreaterThan(2500);
+  // Cursor panel: no extension prompt; the cursor was found in the video.
+  await page.getByRole("button", { name: "Cursor", exact: true }).click();
+  await expect(page.getByText(/Found in your video/)).toBeVisible();
+  await expect(page.getByText(/extension/i)).toHaveCount(0);
 });

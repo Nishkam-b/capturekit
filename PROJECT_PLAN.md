@@ -227,3 +227,14 @@ into a chat or document app; check the device frame on a portrait phone screensh
 | Shortcut reference, FAQ, privacy policy, terms, footer | ✅ | `features.spec.ts` |
 | Image annotations | ✅ (v0.10.0) | `features.spec.ts` (frame changes when an image is added) |
 | Music / voice-over tracks (start, volume, repeat; preview + export mix) | ✅ (v0.10.0) | unit (`trackPositionAt`) + `features.spec.ts` (export of a silent recording contains decoded audio) |
+
+## Phase 9 — Click-based zoom from the video, finished video after recording (v0.11.0)
+| Task | Status | Evidence |
+|---|---|---|
+| Research | ✅ | Screen Studio zooms on clicks and follows the cursor; desktop tools log the cursor natively. A browser can't, but screen/window recordings contain the pointer, so it is detected in the video (template matching) |
+| Cursor detection + click inference (`src/engines/zoom/cursor-detect.ts`) | ✅ | `tests/unit/cursor-detect.spec.ts` (Windows + macOS cursors, menu click found, no-reaction stop and blinking caret ignored) |
+| Real encoded video end to end | ✅ | `features.spec.ts` "real encoded video": 6/6 consecutive passes after fixes |
+| Zoom starts on approach, fully in before the click | ✅ | unit + e2e (segment start + transition ≤ click) |
+| Editor opens after recording with polished defaults and an Export bar | ✅ | e2e helpers now land on the editor |
+| No extension prompts in setup/editor | ✅ | `features.spec.ts` checks the Cursor panel; extension test updated |
+| Real desktop recording with a physical mouse | ⬜ | needs a manual check (automation can't move the real pointer) |
