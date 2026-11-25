@@ -1,8 +1,9 @@
 import { cursorStateAt, type CursorBundle } from "../cursor/path";
 import { zoomAt } from "../zoom/camera";
-import { drawFrame, frameLayout, outputSize, outputToSource, type BackgroundImage, type FrameLayout } from "./layout";
+import { drawFrame, frameLayout, outputSize, outputToSource, type BackgroundImage, type FrameAssets, type FrameLayout } from "./layout";
 import { FULL_CROP, type EditProject } from "./project";
 import { clipOffsets, clipSpeed, locate, toOutput, totalDuration } from "./timeline";
+import { AudioTrackPlayer } from "./audio-tracks";
 
 export type PreviewMode = "edit" | "crop" | "annotate";
 
@@ -60,7 +61,12 @@ export class PreviewPlayer {
 
   setProject(project: EditProject) {
     const clipsChanged = project.clips !== this.project.clips;
+    const tracksChanged = project.audioTracks !== this.project.audioTracks;
     this.project = project;
+    if (tracksChanged) {
+      this.music.setTracks(project.audioTracks ?? [], this.musicUrls);
+      this.music.sync(this.outMs, this._playing);
+    }
     this.applyAudio();
     this.relayout();
     if (clipsChanged) {
@@ -72,11 +78,27 @@ export class PreviewPlayer {
     }
   }
 
-  private backgroundImage: BackgroundImage | null = null;
+  private assets: FrameAssets = {};
 
   /** Uploaded background image (null = none). */
   setBackgroundImage(img: BackgroundImage | null) {
-    this.backgroundImage = img;
+    this.assets = { ...this.assets, backgroundImage: img };
+    if (!this._playing) this.draw();
+  }
+
+  private music = new AudioTrackPlayer();
+  private musicUrls: ReadonlyMap<string, string> = new Map();
+
+  /** File URLs for project.audioTracks (music, voice-over). */
+  setAudioFiles(urls: ReadonlyMap<string, string>) {
+    this.musicUrls = urls;
+    this.music.setTracks(this.project.audioTracks ?? [], urls);
+    this.music.sync(this.outMs, this._playing);
+  }
+
+  /** Decoded images for image annotations. */
+  setOverlayImages(overlays: ReadonlyMap<string, CanvasImageSource>) {
+    this.assets = { ...this.assets, overlays };
     if (!this._playing) this.draw();
   }
 
@@ -103,6 +125,7 @@ export class PreviewPlayer {
       this.emit();
     });
     if (this.camera) void this.camera.play().catch(() => undefined);
+    this.music.sync(this.outMs, true);
     this.emit();
     this.loop();
   }
@@ -113,6 +136,7 @@ export class PreviewPlayer {
     cancelAnimationFrame(this.raf);
     this.screen.pause();
     this.camera?.pause();
+    this.music.pauseAll();
     this.emit();
   }
 
@@ -131,6 +155,7 @@ export class PreviewPlayer {
     this.screen.currentTime = s;
     if (this.camera) this.camera.currentTime = s;
     if (!keepPlaying) this.pause();
+    this.music.sync(this.outMs, this._playing);
     this.emit();
   }
 
@@ -152,6 +177,7 @@ export class PreviewPlayer {
   destroy() {
     this.destroyed = true;
     this.pause();
+    this.music.destroy();
     this.screen.removeEventListener("seeked", this.onSeeked);
     this.screen.removeEventListener("loadeddata", this.onSeeked);
     this.listeners.clear();
@@ -208,7 +234,7 @@ export class PreviewPlayer {
     const z = this.project.zoom;
     // Zoom is paused while editing annotations, so their on-screen positions hold still.
     const cam = z.segments.length && this.mode === "edit" ? zoomAt(z.segments, z.transitionMs, srcMs, c?.follow ?? null) : null;
-    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, state, cam, srcMs, this.backgroundImage);
+    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, state, cam, srcMs, this.assets);
   }
 
   private loop = () => {
@@ -239,6 +265,7 @@ export class PreviewPlayer {
     if (this.camera && Math.abs(this.camera.currentTime - this.screen.currentTime) > 0.12) {
       this.camera.currentTime = this.screen.currentTime;
     }
+    this.music.sync(this.outMs, true);
     this.draw();
     this.emit();
     this.raf = requestAnimationFrame(this.loop);

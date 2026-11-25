@@ -1,3 +1,4 @@
+import type { AudioTrack } from "./audio-tracks";
 import { DEFAULT_CURSOR_STYLE, type CursorStyle } from "../cursor/render";
 import { DEFAULT_ZOOM, type ZoomSettings } from "../zoom/types";
 import type { Annotation } from "../annotations/types";
@@ -91,6 +92,8 @@ export interface EditProject {
   annotations: Annotation[];
   /** 0..1 blur applied to the background (wallpaper, uploaded image or blurred video). */
   backgroundBlur?: number;
+  /** Extra audio (music, voice-over) laid over the edit. Files are stored as media `audio/<id>`. */
+  audioTracks?: AudioTrack[];
 }
 
 export const FULL_CROP: NormRect = { x: 0, y: 0, w: 1, h: 1 };

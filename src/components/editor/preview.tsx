@@ -19,6 +19,9 @@ interface Props {
   onCropCommit: (before: NormRect) => void;
   cursor: CursorBundle | null;
   backgroundImage?: BackgroundImage | null;
+  overlayImages?: ReadonlyMap<string, CanvasImageSource>;
+  /** File URLs for project.audioTracks. */
+  audioUrls?: ReadonlyMap<string, string>;
   /** When set, clicking the preview picks a point (normalised source coords) instead of play/pause. */
   onPick?: (x: number, y: number) => void;
   /** Drag/resize the webcam on the preview (Webcam tool). */
@@ -34,7 +37,7 @@ interface Props {
 }
 
 /** Canvas preview of the edit, plus the crop overlay in crop mode. */
-export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, cursor, backgroundImage = null, onPick, webcamEdit, annotationEdit }: Props) {
+export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, cursor, backgroundImage = null, overlayImages, audioUrls, onPick, webcamEdit, annotationEdit }: Props) {
   const screenRef = useRef<HTMLVideoElement>(null);
   const camRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -100,6 +103,14 @@ export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop,
   useEffect(() => {
     player?.setBackgroundImage(backgroundImage);
   }, [player, backgroundImage]);
+
+  useEffect(() => {
+    if (overlayImages) player?.setOverlayImages(overlayImages);
+  }, [player, overlayImages]);
+
+  useEffect(() => {
+    if (audioUrls) player?.setAudioFiles(audioUrls);
+  }, [player, audioUrls]);
 
   return (
     <div ref={boxRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-6">

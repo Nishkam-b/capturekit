@@ -8,7 +8,8 @@ import { formatDuration } from "@/engines/shared/format";
 import { ZOOM_LEVELS, type ZoomSegment, type ZoomSettings } from "@/engines/zoom/types";
 import { ANNOTATION_COLORS, KIND_LABEL, type Annotation, type AnnotationKind } from "@/engines/annotations/types";
 import type { WebcamStyle } from "@/engines/editor/webcam";
-import { Droplets, ImagePlus } from "lucide-react";
+import { Droplets, ImagePlus, Music } from "lucide-react";
+import type { AudioTrack } from "@/engines/editor/audio-tracks";
 import { CURSOR_THEMES } from "@/engines/cursor/render";
 import { Button, Toggle, cx } from "../ui";
 
@@ -90,6 +91,12 @@ interface PanelProps {
   addAnnotation: (kind: AnnotationKind) => void;
   editAnnotation: (id: string, patch: Partial<Annotation>, transient?: boolean) => void;
   deleteAnnotation: (id: string) => void;
+  addImageAnnotation: (file: File) => void;
+  /** Adds a music / voice-over file at the playhead. */
+  addAudioTrack: (file: File) => void;
+  /** Current playhead (output ms). */
+  playheadMs: number;
+  audioError: string | null;
   selectedAnnotationId: string | null;
   onSelectAnnotation: (id: string | null) => void;
 }
@@ -420,32 +427,89 @@ function BackgroundPanel({ project, update, live, liveStart, liveEnd, background
   );
 }
 
-function AudioPanel({ project, update, live, liveStart, liveEnd, hasAudio }: PanelProps) {
-  if (!hasAudio) {
-    return (
-      <Section title="Audio">
-        <p className="text-sm text-muted">This recording has no audio.</p>
-      </Section>
-    );
-  }
+function AudioPanel({ project, update, live, liveStart, liveEnd, hasAudio, addAudioTrack, playheadMs, audioError }: PanelProps) {
+  const tracks = project.audioTracks ?? [];
+  const editTrack = (id: string, patch: Partial<AudioTrack>, transient = false) =>
+    (transient ? live : update)({ audioTracks: tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
   return (
-    <Section title="Audio" hint="Applies to the whole video (mic and system audio are mixed together).">
-      <Slider
-        label="Volume"
-        value={project.audio.volume}
-        min={0}
-        max={1}
-        step={0.01}
-        format={(v) => `${Math.round(v * 100)}%`}
-        onChange={(volume) => live({ audio: { ...project.audio, volume } })}
-        onStart={liveStart}
-        onEnd={liveEnd}
-      />
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted">Mute audio</span>
-        <Toggle label="Mute audio" checked={project.audio.muted} onChange={(muted) => update({ audio: { ...project.audio, muted } })} />
-      </div>
-    </Section>
+    <>
+      <Section title="Recording audio" hint={hasAudio ? "Mic and system audio, mixed together." : undefined}>
+        {hasAudio ? (
+          <>
+            <Slider
+              label="Volume"
+              value={project.audio.volume}
+              min={0}
+              max={1}
+              step={0.01}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(volume) => live({ audio: { ...project.audio, volume } })}
+              onStart={liveStart}
+              onEnd={liveEnd}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted">Mute audio</span>
+              <Toggle label="Mute audio" checked={project.audio.muted} onChange={(muted) => update({ audio: { ...project.audio, muted } })} />
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted">This recording has no audio.</p>
+        )}
+      </Section>
+      <Section title={`Music & voice-over (${tracks.length})`} hint="Added at the playhead. Plays over the edited video, across cuts.">
+        <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-control border border-line bg-white px-3 text-xs font-semibold text-ink hover:bg-subtle">
+          <Music className="size-3.5" /> Add audio file
+          <input
+            type="file"
+            accept="audio/*,.mp3,.m4a,.wav,.ogg,.opus,.webm"
+            className="sr-only"
+            data-testid="add-audio-track"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) addAudioTrack(f);
+            }}
+          />
+        </label>
+        {audioError && <p className="mt-2 text-xs text-danger">{audioError}</p>}
+        <ol className="mt-3 space-y-3" data-testid="audio-tracks">
+          {tracks.map((t) => (
+            <li key={t.id} className="rounded-control border border-line p-3">
+              <p className="mb-1 truncate text-xs font-semibold" title={t.name}>
+                {t.name}
+              </p>
+              <p className="mb-2 text-[11px] text-muted tabular-nums">
+                Starts at {formatDuration(t.start)} · {formatDuration(t.durationMs)} long{t.loop ? ", repeating" : ""}
+              </p>
+              <Slider
+                label={`Volume: ${t.name}`}
+                value={t.volume}
+                min={0}
+                max={1}
+                step={0.01}
+                format={(v) => `${Math.round(v * 100)}%`}
+                onChange={(volume) => editTrack(t.id, { volume }, true)}
+                onStart={liveStart}
+                onEnd={liveEnd}
+              />
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted">Repeat to the end</span>
+                <Toggle label={`Repeat ${t.name}`} checked={t.loop} onChange={(loop) => editTrack(t.id, { loop })} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="ghost" onClick={() => editTrack(t.id, { start: Math.round(playheadMs) })}>
+                  Start at playhead
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => update({ audioTracks: tracks.filter((x) => x.id !== t.id) })}>
+                  Remove
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ol>
+        {tracks.length === 0 && <p className="text-xs text-muted">MP3, M4A, WAV or OGG. The file stays on this device.</p>}
+      </Section>
+    </>
   );
 }
 
@@ -836,6 +900,8 @@ export interface AnnotationEditorProps {
   liveEnd: () => void;
   /** Video annotations have a time range; screenshot ones don't. */
   timed: boolean;
+  /** Adds an image annotation from a file (logo, sticker, screenshot). Hidden when not provided. */
+  onAddImage?: (file: File) => void;
 }
 
 function AnnotationsPanel(p: PanelProps) {
@@ -850,6 +916,7 @@ function AnnotationsPanel(p: PanelProps) {
       liveStart={p.liveStart}
       liveEnd={p.liveEnd}
       timed
+      onAddImage={p.addImageAnnotation}
     />
   );
 }
@@ -868,6 +935,22 @@ export function AnnotationEditor(p: AnnotationEditorProps) {
               {KIND_LABEL[k]}
             </Button>
           ))}
+          {p.onAddImage && (
+            <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-control border border-line bg-white px-3 text-xs font-semibold text-ink hover:bg-subtle">
+              <ImagePlus className="size-3.5" /> Image
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                className="sr-only"
+                data-testid="add-image-annotation"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) p.onAddImage?.(f);
+                }}
+              />
+            </label>
+          )}
         </div>
       </Section>
 
@@ -904,7 +987,8 @@ export function AnnotationEditor(p: AnnotationEditorProps) {
               )}
             </>
           )}
-          {a.kind !== "blur" && (
+          {a.kind === "image" && <p className="mb-3 text-xs text-muted">Drag it on the preview to move it; drag a corner to resize. The image stays on this device.</p>}
+          {a.kind !== "blur" && a.kind !== "image" && (
             <div className="mb-3">
               <ColorRowCustom
                 label={a.kind === "text" ? "Text colour" : "Colour"}

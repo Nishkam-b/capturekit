@@ -67,13 +67,22 @@ export async function importVideoFile(file: File): Promise<string> {
 export async function exportProjectFile(recordingId: string): Promise<{ blob: Blob; filename: string }> {
   const meta = await getRecording(recordingId);
   if (!meta) throw new Error("Recording not found.");
-  const kinds: MediaKind[] = ["screen", "camera", "thumb", "background", ...meta.screenshots.map((s) => `shot/${s.id}` as MediaKind)];
+  const project = await getProject(recordingId);
+  const kinds: MediaKind[] = [
+    "screen",
+    "camera",
+    "thumb",
+    "background",
+    ...meta.screenshots.map((s) => `shot/${s.id}` as MediaKind),
+    ...(project?.annotations ?? []).filter((a) => a.imageId).map((a) => `overlay/${a.imageId}` as MediaKind),
+    ...(project?.audioTracks ?? []).map((t) => `audio/${t.id}` as MediaKind),
+  ];
   const media: Record<string, Blob> = {};
   for (const k of kinds) {
     const b = await getMedia(recordingId, k);
     if (b) media[k] = b;
   }
-  const blob = packProjectFile({ meta, project: await getProject(recordingId), cursor: await getCursorTrack(recordingId), media });
+  const blob = packProjectFile({ meta, project, cursor: await getCursorTrack(recordingId), media });
   const stem = meta.name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "capturekit";
   return { blob, filename: `${stem}${PROJECT_FILE_EXT}` };
 }

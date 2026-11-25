@@ -69,6 +69,8 @@ export function drawAnnotations(
   screen: CanvasImageSource,
   short: number,
   zoomScale = 1,
+  /** Decoded images for image annotations, by imageId. Missing ones are skipped. */
+  images: ReadonlyMap<string, CanvasImageSource> = NO_IMAGES,
 ): void {
   const visible = list.filter((a) => annotationOpacity(a, t) > 0);
   if (visible.length === 0) return;
@@ -81,19 +83,36 @@ export function drawAnnotations(
   for (const a of order) {
     ctx.save();
     ctx.globalAlpha = annotationOpacity(a, t);
-    drawOne(ctx, a, v, screen, short, zoomScale);
+    drawOne(ctx, a, v, screen, short, zoomScale, images);
     ctx.restore();
   }
   ctx.restore();
 }
 
-function drawOne(ctx: CanvasRenderingContext2D, a: Annotation, v: ViewMapping, screen: CanvasImageSource, short: number, zoomScale: number) {
+const NO_IMAGES: ReadonlyMap<string, CanvasImageSource> = new Map();
+
+function drawOne(
+  ctx: CanvasRenderingContext2D,
+  a: Annotation,
+  v: ViewMapping,
+  screen: CanvasImageSource,
+  short: number,
+  zoomScale: number,
+  images: ReadonlyMap<string, CanvasImageSource>,
+) {
   const lw = Math.max(1, a.stroke * short * Math.sqrt(zoomScale));
   const p0 = toOutput(v, a.x, a.y);
   const p1 = toOutput(v, a.x + a.w, a.y + a.h);
   const box = { x: Math.min(p0.x, p1.x), y: Math.min(p0.y, p1.y), w: Math.abs(p1.x - p0.x), h: Math.abs(p1.y - p0.y) };
 
   switch (a.kind) {
+    case "image": {
+      const img = a.imageId ? images.get(a.imageId) : undefined;
+      if (!img || box.w < 1 || box.h < 1) return;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, box.x, box.y, box.w, box.h);
+      return;
+    }
     case "blur": {
       // Pixelate: sample the original pixels into a tiny canvas, then scale up without smoothing.
       const block = Math.max(6, short / 70);

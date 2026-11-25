@@ -10,7 +10,7 @@ export const GIF_SIZES = { small: 480, medium: 720, large: 1080 } as const;
 export type GifSize = keyof typeof GIF_SIZES;
 export const GIF_FPS = [10, 15, 20] as const;
 
-export interface GifExportOptions extends Pick<ExportOptions, "project" | "screen" | "camera" | "cursor" | "backgroundImage"> {
+export interface GifExportOptions extends Pick<ExportOptions, "project" | "screen" | "camera" | "cursor" | "backgroundImage" | "overlayImages"> {
   size: GifSize;
   fps: number;
   loop: boolean;
@@ -77,7 +77,7 @@ export async function exportGif(opts: GifExportOptions, onProgress: (p: ExportPr
         cur?.path ? cursorStateAt(cur.path, src + project.cursor.offsetMs, cur.pressed) : null,
         project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, src, cur?.follow ?? null) : null,
         src,
-        opts.backgroundImage ?? null,
+        { backgroundImage: opts.backgroundImage ?? null, overlays: opts.overlayImages },
       );
       gif.addFrame(ctx.getImageData(0, 0, w, h).data, Math.min(step, total - t));
       onProgress({ status: "rendering", fraction: Math.min(1, (t + step) / total) });

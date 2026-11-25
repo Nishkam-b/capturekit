@@ -34,7 +34,8 @@ No account, no uploads, no subscription: everything stays on your device.
   (menus, dialogs, typing) and zooms there; with the extension it follows the exact pointer. Plus manual zooms.
 - **Cursor effects:** cursor (dark, light or dot), smoothing, highlight, click ripple, click bounce, motion blur,
   sway (via the optional extension)
-- **Annotations:** text, arrows, shapes, highlighter and **blur** for sensitive info
+- **Annotations:** text, arrows, shapes, highlighter, **images** (logos, stickers) and **blur** for sensitive info
+- **Music & voice-over:** add audio files with start time, volume and repeat, mixed into the export
 - Export **WebM**, **MP4** (where the browser can encode it) or **GIF** (size, frame rate, loop)
 - **Import** an existing video; save and open portable **`.capturekit` project files**
 - Keyboard shortcut reference (press **?** in the editor)

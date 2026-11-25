@@ -123,9 +123,10 @@ export function drawFrame(
   zoom: ZoomCamera | null = null,
   /** Source time of this frame (ms), for timed annotations. */
   timeMs = 0,
-  /** Uploaded background image (when project.background is "image"). */
-  backgroundImage: BackgroundImage | null = null,
+  /** Images used by the frame: uploaded background, image annotations. */
+  assets: FrameAssets = {},
 ): void {
+  const backgroundImage = assets.backgroundImage ?? null;
   const { out, dst, radius, cam } = layout;
   // Smart zoom narrows the part of the source drawn into the same destination box.
   const src = zoom ? zoomRect(layout.src, layout.source.w, layout.source.h, zoom) : layout.src;
@@ -153,7 +154,7 @@ export function drawFrame(
   }
   ctx.drawImage(screen, src.x, src.y, src.w, src.h, dst.x, dst.y, dst.w, dst.h);
   if (project.annotations.length) {
-    drawAnnotations(ctx, project.annotations, timeMs, view, screen, short, zoom?.scale ?? 1);
+    drawAnnotations(ctx, project.annotations, timeMs, view, screen, short, zoom?.scale ?? 1, assets.overlays);
   }
   if (cursor) {
     // Clipped to the video area (cursor never draws over the background).
@@ -169,6 +170,12 @@ export function drawFrame(
 }
 
 export type BackgroundImage = CanvasImageSource & { width: number; height: number };
+
+export interface FrameAssets {
+  backgroundImage?: BackgroundImage | null;
+  /** Decoded images for image annotations, by imageId. */
+  overlays?: ReadonlyMap<string, CanvasImageSource>;
+}
 
 /** Paints the area around the video: preset, wallpaper, uploaded image or the blurred video itself. */
 function drawBackground(

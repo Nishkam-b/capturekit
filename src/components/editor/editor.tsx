@@ -22,6 +22,7 @@ import { analyzeRecording } from "@/engines/zoom/sampler";
 import { BG_IMAGE, createProject, normalizeProject, type EditProject, type NormRect } from "@/engines/editor/project";
 import { locate, removeClip, sourceToOutput, splitAt, totalDuration, trimClip } from "@/engines/editor/timeline";
 import { createId, formatDuration } from "@/engines/shared/format";
+import type { AudioTrack } from "@/engines/editor/audio-tracks";
 import type { RecordingMeta } from "@/engines/shared/types";
 import { getCursorTrack, getMedia, getProject, getRecording, saveCursorTrack, saveMedia, saveProject } from "@/engines/storage/db";
 import { Logo } from "../app-shell";
@@ -410,6 +411,118 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
     },
     [history, project.clips, snap.timeMs],
   );
+  // Extra audio tracks: files stored with the recording, played through object URLs.
+  const [audioFiles, setAudioFiles] = useState<ReadonlyMap<string, { blob: Blob; url: string }>>(() => new Map());
+  const trackIds = useMemo(() => (project.audioTracks ?? []).map((t) => t.id).sort().join(","), [project.audioTracks]);
+  useEffect(() => {
+    let live = true;
+    const missing = (trackIds ? trackIds.split(",") : []).filter((id) => !audioFiles.has(id));
+    if (!missing.length) return;
+    void Promise.all(missing.map(async (id) => [id, await getMedia(meta.id, `audio/${id}`).catch(() => null)] as const)).then((loaded) => {
+      if (!live) return;
+      setAudioFiles((old) => {
+        const next = new Map(old);
+        for (const [id, blob] of loaded) if (blob) next.set(id, { blob, url: URL.createObjectURL(blob) });
+        return next;
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [trackIds, audioFiles, meta.id]);
+  const audioFilesRef = useRef(audioFiles);
+  useEffect(() => {
+    audioFilesRef.current = audioFiles;
+  }, [audioFiles]);
+  useEffect(() => () => audioFilesRef.current.forEach((f) => URL.revokeObjectURL(f.url)), []);
+  const audioUrls = useMemo(() => new Map([...audioFiles].map(([id, f]) => [id, f.url])), [audioFiles]);
+  const audioBlobs = useMemo(() => new Map([...audioFiles].map(([id, f]) => [id, f.blob])), [audioFiles]);
+
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const addAudioTrack = useCallback(
+    async (file: File) => {
+      const url = URL.createObjectURL(file);
+      const durationMs = await new Promise<number>((resolve) => {
+        const el = new Audio();
+        el.preload = "metadata";
+        el.onloadedmetadata = () => resolve(Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : 0);
+        el.onerror = () => resolve(0);
+        el.src = url;
+      });
+      if (durationMs <= 0) {
+        URL.revokeObjectURL(url);
+        setAudioError("That file couldn't be played as audio in this browser. Try MP3, M4A, WAV or OGG.");
+        return;
+      }
+      setAudioError(null);
+      const id = createId();
+      await saveMedia(meta.id, `audio/${id}`, file);
+      setAudioFiles((old) => new Map(old).set(id, { blob: file, url }));
+      const track: AudioTrack = { id, name: file.name.replace(/\.[^.]+$/, ""), start: Math.round(snap.timeMs), durationMs, volume: 0.5, loop: false };
+      history.set((p) => ({ ...p, audioTracks: [...(p.audioTracks ?? []), track] }));
+      setTool("audio");
+    },
+    [history, meta.id, snap.timeMs],
+  );
+
+  // Image annotations: files stored with the recording, decoded once for drawing.
+  const [overlays, setOverlays] = useState<ReadonlyMap<string, ImageBitmap>>(() => new Map());
+  const overlayIds = useMemo(
+    () => [...new Set(project.annotations.filter((a) => a.kind === "image" && a.imageId).map((a) => a.imageId!))].sort().join(","),
+    [project.annotations],
+  );
+  useEffect(() => {
+    let live = true;
+    const want = overlayIds ? overlayIds.split(",") : [];
+    const missing = want.filter((id) => !overlays.has(id));
+    if (!missing.length) return;
+    void Promise.all(
+      missing.map(async (id) => {
+        const blob = await getMedia(meta.id, `overlay/${id}`).catch(() => null);
+        return blob ? ([id, await createImageBitmap(blob)] as const) : null;
+      }),
+    ).then((loaded) => {
+      if (!live) return;
+      setOverlays((old) => {
+        const next = new Map(old);
+        for (const e of loaded) if (e) next.set(e[0], e[1]);
+        return next;
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [overlayIds, overlays, meta.id]);
+  useEffect(() => () => overlays.forEach((b) => b.close()), [overlays]);
+
+  const addImageAnnotation = useCallback(
+    async (file: File) => {
+      let bitmap: ImageBitmap;
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch {
+        return; // not a decodable image
+      }
+      const imageId = createId();
+      await saveMedia(meta.id, `overlay/${imageId}`, file);
+      setOverlays((old) => new Map(old).set(imageId, bitmap));
+      const id = createId();
+      const at = locate(project.clips, snap.timeMs).sourceMs;
+      const sw = player?.sourceSize?.w || meta.screen.width || 16;
+      const sh = player?.sourceSize?.h || meta.screen.height || 9;
+      // 30% of the frame width, keeping the image's own proportions.
+      const w = 0.3;
+      const h = Math.min(0.9, (w * (bitmap.height / bitmap.width) * sw) / sh);
+      history.set((p) => {
+        const a = createAnnotation("image", id, at, p.sourceDurationMs);
+        return { ...p, annotations: [...p.annotations, { ...a, imageId, x: 0.5 - w / 2, y: 0.5 - h / 2, w, h }] };
+      });
+      setSelectedAnnotationId(id);
+      setTool("annotate");
+    },
+    [history, meta.id, meta.screen.width, meta.screen.height, player, project.clips, snap.timeMs],
+  );
+
   const editAnnotation = useCallback(
     (id: string, patch: Partial<Annotation>, transient = false) =>
       history.set((p) => ({ ...p, annotations: p.annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)) }), { transient }),
@@ -537,6 +650,8 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
             onCropCommit={onCropCommit}
             cursor={cursor}
             backgroundImage={bgImage?.bitmap ?? null}
+            overlayImages={overlays}
+            audioUrls={audioUrls}
             onPick={pickFocus && selectedZoom ? (x: number, y: number) => editZoom(selectedZoom.id, { x, y }) : undefined}
             webcamEdit={tool === "webcam" && camera ? { onChange: (patch) => updateWebcam(patch, true), onStart: liveStart, onEnd: liveEnd } : null}
             annotationEdit={
@@ -598,6 +713,10 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           addAnnotation={addAnnotation}
           editAnnotation={editAnnotation}
           deleteAnnotation={deleteAnnotation}
+          addImageAnnotation={(f) => void addImageAnnotation(f)}
+          addAudioTrack={(f) => void addAudioTrack(f)}
+          playheadMs={snap.timeMs}
+          audioError={audioError}
           selectedAnnotationId={selectedAnnotationId}
           onSelectAnnotation={setSelectedAnnotationId}
           addZoom={addZoom}
@@ -664,6 +783,8 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           srcH={srcSize.h || meta.screen.height}
           cursor={cursor}
           backgroundImage={bgImage?.bitmap ?? null}
+          overlayImages={overlays}
+          audioFiles={audioBlobs}
           onClose={() => setExporting(false)}
         />
       )}

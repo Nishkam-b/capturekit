@@ -225,4 +225,5 @@ into a chat or document app; check the device frame on a portrait phone screensh
 | GIF export | ✅ | unit (encoder) + `features.spec.ts` (decodes at the chosen size) |
 | Import video; `.capturekit` project files | ✅ | `features.spec.ts` round trip |
 | Shortcut reference, FAQ, privacy policy, terms, footer | ✅ | `features.spec.ts` |
-| Image annotations, extra audio tracks | ⬜ | next |
+| Image annotations | ✅ (v0.10.0) | `features.spec.ts` (frame changes when an image is added) |
+| Music / voice-over tracks (start, volume, repeat; preview + export mix) | ✅ (v0.10.0) | unit (`trackPositionAt`) + `features.spec.ts` (export of a silent recording contains decoded audio) |

@@ -13,7 +13,7 @@ export const PENDING = "pending";
 export const CURSOR = "cursor";
 export const SCREENSHOTS = "screenshots";
 
-export type MediaKind = "screen" | "camera" | "thumb" | "image" | "background" | `shot/${string}`;
+export type MediaKind = "screen" | "camera" | "thumb" | "image" | "background" | `shot/${string}` | `overlay/${string}` | `audio/${string}`;
 
 interface MediaRecord {
   key: string;

@@ -177,3 +177,14 @@ test.describe("webcam and cursor looks", () => {
     expect(bounceScale(400)).toBe(1);
   });
 });
+
+test.describe("extra audio tracks", () => {
+  test("track position follows the output timeline, with and without repeat", async () => {
+    const { trackPositionAt } = await import("../../src/engines/editor/audio-tracks");
+    const t = { start: 2000, durationMs: 3000, loop: false };
+    expect(trackPositionAt(t, 1000)).toBeNull();
+    expect(trackPositionAt(t, 2500)).toBeCloseTo(0.5);
+    expect(trackPositionAt(t, 5000)).toBeNull();
+    expect(trackPositionAt({ ...t, loop: true }, 6500)).toBeCloseTo(1.5);
+  });
+});

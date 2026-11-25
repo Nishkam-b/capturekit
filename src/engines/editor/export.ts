@@ -5,6 +5,7 @@ import { patchWebmHead } from "../recorder/webm";
 import { drawFrame, frameLayout, outputSize, type BackgroundImage, type ResolutionPreset } from "./layout";
 import type { EditProject } from "./project";
 import { clipDuration, clipSpeed, totalDuration } from "./timeline";
+import { AudioTrackPlayer } from "./audio-tracks";
 
 /**
  * Export pipeline v1: plays the edit once in real time, draws each frame with the
@@ -35,6 +36,10 @@ export interface ExportOptions {
   cursor?: CursorBundle | null;
   /** Uploaded background image, if the project uses one. */
   backgroundImage?: BackgroundImage | null;
+  /** Decoded images for image annotations. */
+  overlayImages?: ReadonlyMap<string, CanvasImageSource>;
+  /** Files for project.audioTracks, by track id. */
+  audioFiles?: ReadonlyMap<string, Blob>;
 }
 
 export interface ExportResult {
@@ -112,17 +117,40 @@ export async function exportVideo(
     cleanups.push(() => videoTrack.stop());
     const tracks: MediaStreamTrack[] = [videoTrack];
 
-    const withAudio = opts.hasAudio && !project.audio.muted && project.audio.volume > 0;
+    const screenAudio = opts.hasAudio && !project.audio.muted && project.audio.volume > 0;
+    const extra = (project.audioTracks ?? []).filter((t) => opts.audioFiles?.has(t.id) && t.volume > 0);
+    const withAudio = screenAudio || extra.length > 0;
+    let music: AudioTrackPlayer | null = null;
     if (withAudio) {
       const ac = new AudioContext();
       cleanups.push(() => void ac.close());
-      const source = ac.createMediaElementSource(screen); // element audio now only goes to the graph (silent to the user)
-      const gain = ac.createGain();
-      gain.gain.value = project.audio.volume;
       const dest = ac.createMediaStreamDestination();
-      source.connect(gain).connect(dest);
+      if (screenAudio) {
+        const source = ac.createMediaElementSource(screen); // element audio now only goes to the graph (silent to the user)
+        const gain = ac.createGain();
+        gain.gain.value = project.audio.volume;
+        source.connect(gain).connect(dest);
+      } else {
+        screen.muted = true;
+      }
+      if (extra.length) {
+        // Extra tracks are routed only into the mix, never to the speakers.
+        const urls = new Map<string, string>();
+        for (const t of extra) {
+          const url = URL.createObjectURL(opts.audioFiles!.get(t.id)!);
+          urls.set(t.id, url);
+          cleanups.push(() => URL.revokeObjectURL(url));
+        }
+        music = new AudioTrackPlayer((el) => ac.createMediaElementSource(el).connect(dest));
+        music.setTracks(extra, urls);
+        const m = music;
+        cleanups.push(() => m.destroy());
+        await music.ready();
+      }
       await ac.resume();
       tracks.push(dest.stream.getAudioTracks()[0]);
+    } else {
+      screen.muted = true;
     }
 
     const mimeType = exportMimeFor(opts.format, withAudio);
@@ -152,7 +180,7 @@ export async function exportVideo(
         cur?.path ? cursorStateAt(cur.path, screen.currentTime * 1000 + project.cursor.offsetMs, cur.pressed) : null,
         project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, screen.currentTime * 1000, cur?.follow ?? null) : null,
         screen.currentTime * 1000,
-        opts.backgroundImage ?? null,
+        { backgroundImage: opts.backgroundImage ?? null, overlays: opts.overlayImages },
       );
     const total = totalDuration(project.clips);
     let doneMs = 0;
@@ -173,10 +201,13 @@ export async function exportVideo(
         draw,
         signal,
         onTick: (t) => {
-          onProgress({ status: "rendering", fraction: Math.min(1, (doneMs + (t * 1000 - clip.start) / rate) / total) });
+          const outMs = doneMs + (t * 1000 - clip.start) / rate;
+          music?.sync(outMs, true);
+          onProgress({ status: "rendering", fraction: Math.min(1, outMs / total) });
         },
         onHidden: (hidden) => {
           if (hidden) {
+            music?.pauseAll();
             if (recorder.state === "recording") recorder.pause();
             onProgress({ status: "paused-hidden", fraction: doneMs / total });
           } else if (recorder.state === "paused") {
@@ -186,6 +217,7 @@ export async function exportVideo(
       });
       if (recorderError) throw recorderError;
       recorder.pause();
+      music?.pauseAll();
       doneMs += clipDuration(clip);
     }
 

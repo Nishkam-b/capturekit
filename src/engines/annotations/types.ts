@@ -4,7 +4,7 @@
  * times are source ms (so cuts don't move them).
  */
 
-export type AnnotationKind = "text" | "arrow" | "rect" | "ellipse" | "highlight" | "blur";
+export type AnnotationKind = "text" | "arrow" | "rect" | "ellipse" | "highlight" | "blur" | "image";
 
 export interface Annotation {
   id: string;
@@ -25,6 +25,8 @@ export interface Annotation {
   bold: boolean;
   /** Text background pill colour, or null for none. */
   background: string | null;
+  /** Image annotations: id of the stored image (media `overlay/<imageId>`). */
+  imageId?: string;
 }
 
 export const ANNOTATION_FADE_MS = 150;
@@ -132,4 +134,5 @@ export const KIND_LABEL: Record<AnnotationKind, string> = {
   ellipse: "Circle",
   highlight: "Highlighter",
   blur: "Blur",
+  image: "Image",
 };

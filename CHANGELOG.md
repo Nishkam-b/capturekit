@@ -2,6 +2,19 @@
 
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] — 2026-11-25 — Image annotations and music tracks
+
+### Added
+- **Image annotations:** put a logo, sticker or screenshot on the video (PNG, JPG, WebP, GIF, SVG), move and resize
+  it on the preview, and time it on the timeline like any annotation. Images are stored with the recording.
+- **Music & voice-over tracks:** add audio files in the Audio panel, set where each starts, its volume, and whether it
+  repeats to the end. Tracks follow the edited timeline (across cuts and speed changes), play in the preview, and are
+  mixed into MP4/WebM exports. GIFs stay silent.
+- `.capturekit` project files include annotation images and audio tracks.
+
+### Fixed
+- Exporting a recording with no audio no longer plays the video's sound through the speakers while rendering.
+
 ## [0.9.0] — 2026-11-25 — Phase 8: automatic zoom for every recording, one-click extension, editor features
 
 ### Added

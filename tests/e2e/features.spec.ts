@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { FAKE_MEDIA } from "./helpers";
@@ -136,4 +136,76 @@ test("help, FAQ, privacy and terms pages, footer credit, and the extension downl
   const zip = await res.body();
   expect(zip.subarray(0, 2).toString()).toBe("PK");
   expect(zip.includes(Buffer.from("capturekit-extension/manifest.json"))).toBe(true);
+});
+
+/** A 2-second 440 Hz mono WAV. */
+function sineWav(seconds = 2, rate = 22050): Buffer {
+  const n = seconds * rate;
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.write("WAVEfmt ", 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 12000), 44 + i * 2);
+  return buf;
+}
+
+test("image annotation and a music track: shown in the preview and mixed into the export", async ({ page }, info) => {
+  await page.goto("/record");
+  await page.getByRole("radio", { name: /Entire screen/ }).click();
+  await page.getByRole("switch", { name: "Countdown" }).click();
+  const sys = page.getByRole("switch", { name: "System audio" });
+  if ((await sys.getAttribute("aria-checked")) === "true") await sys.click();
+  await page.getByRole("button", { name: "Start recording" }).click();
+  await expect(page.getByTestId("timer").first()).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(3500);
+  await page.getByRole("button", { name: "Stop recording" }).first().click();
+  await page.waitForURL(/\/recordings\/view\?id=/, { timeout: 30_000 });
+  await page.getByRole("link", { name: /Edit & export/ }).click();
+  await expect(page.getByTestId("clip-0")).toBeVisible();
+
+  // Image annotation: the frame at the playhead changes once the image is added.
+  const ruler = (await page.getByTestId("timeline-ruler").boundingBox())!;
+  await page.mouse.click(ruler.x + ruler.width * 0.4, ruler.y + ruler.height / 2);
+  await page.getByRole("button", { name: "Annotations", exact: true }).click();
+  await page.waitForTimeout(500);
+  const frame = () => page.getByTestId("editor-canvas").evaluate((c: HTMLCanvasElement) => c.toDataURL("image/png"));
+  const before = await frame();
+  await page.getByTestId("add-image-annotation").setInputFiles(path.resolve("extension/icons/icon-128.png"));
+  await expect(page.getByTestId("annotation-list").or(page.getByText("Drag it on the preview to move it"))).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await frame()).not.toBe(before);
+
+  // Music track at the start.
+  const wav = path.join(info.outputDir, "beep.wav");
+  await mkdir(info.outputDir, { recursive: true });
+  await writeFile(wav, sineWav());
+  await page.getByRole("button", { name: "Audio", exact: true }).click();
+  await page.getByTestId("add-audio-track").setInputFiles(wav);
+  await expect(page.getByTestId("audio-tracks").locator("li")).toHaveCount(1);
+  await expect(page.getByTestId("audio-tracks")).toContainText("beep");
+
+  // Export WebM: the recording itself has no audio, so any sound comes from the music track.
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: "WebM" }).click();
+  await dialog.getByRole("radio", { name: /^720p/ }).click();
+  await dialog.getByRole("button", { name: "Export WebM" }).click();
+  await expect(dialog.getByTestId("export-result")).toBeVisible({ timeout: 60_000 });
+  const hasAudio = await dialog.getByTestId("export-result").evaluate(async (v: HTMLVideoElement) => {
+    v.muted = true;
+    await v.play();
+    await new Promise((r) => setTimeout(r, 1200));
+    v.pause();
+    return (v as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount ?? -1;
+  });
+  expect(hasAudio).toBeGreaterThan(0);
 });

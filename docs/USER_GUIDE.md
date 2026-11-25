@@ -76,6 +76,14 @@ In **Trim & cut**, select a clip (split first to speed up only part of the video
 - **Webcam:** roundness, edge margin, and "Shrink while zoomed in" so it covers less of the action.
 - **Cursor** (extension recordings): dark, light or dot style, click bounce, motion blur and sway.
 
+### Images and music
+
+- **Annotations › Image** adds a picture (logo, sticker, screenshot) at the playhead. Drag it on the preview and drag
+  its corners to resize; drag its bar on the timeline to change when it shows.
+- **Audio › Add audio file** adds music or a voice-over at the playhead. Set its volume, move its start to the
+  playhead, or let it repeat to the end. It plays over the edited video, across cuts, and is mixed into MP4/WebM
+  exports (GIFs have no sound).
+
 ### Export, import and project files
 
 - Export MP4, WebM or **GIF** (small/medium/large, 10–20 fps, loop on/off). GIFs have no sound.

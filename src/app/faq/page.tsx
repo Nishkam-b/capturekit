@@ -82,6 +82,15 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     a: <>MP4 and WebM video, animated GIF (choose size, frame rate and looping), plus PNG, JPG and WebP for screenshots. Exports are made on your device.</>,
   },
   {
+    q: "Can I add music or my logo?",
+    a: (
+      <>
+        Yes. In the editor, <b>Audio › Add audio file</b> lays music or a voice-over under the video (with volume and
+        repeat), and <b>Annotations › Image</b> puts a logo or sticker on it. Both stay on your device.
+      </>
+    ),
+  },
+  {
     q: "Can I move a project to another computer?",
     a: (
       <>
