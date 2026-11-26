@@ -6,19 +6,22 @@ import { FAKE_MEDIA, landOnRecording } from "./helpers";
 test.use({ launchOptions: { args: [...FAKE_MEDIA, "--auto-select-desktop-capture-source=Entire screen"] } });
 test.setTimeout(180_000);
 
-/** Records ~5 s of the entire screen, pressing "Zoom in here" once, and returns on the recording page. */
-async function recordWithMarker(page: Page) {
+/** Records ~5 s of the entire screen (optionally with the webcam) and returns on the recording page. */
+async function recordScreen(page: Page, camera = false) {
   await page.goto("/record");
   await page.getByRole("radio", { name: /Entire screen/ }).click();
   await page.getByRole("switch", { name: "Countdown" }).click();
   const sys = page.getByRole("switch", { name: "System audio" });
   if ((await sys.getAttribute("aria-checked")) === "true") await sys.click();
+  if (camera) {
+    await page.getByRole("switch", { name: "Webcam" }).click();
+    await expect(page.locator("video").first()).toBeVisible();
+  }
   await page.getByRole("button", { name: "Start recording" }).click();
   await expect(page.getByTestId("timer").first()).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(1500);
-  await page.getByTestId("zoom-marker").first().click();
-  await expect(page.getByTestId("zoom-marker").first()).toContainText("1");
-  await page.waitForTimeout(3500);
+  // The recorder is simple: no zoom marker or cursor tracking.
+  await expect(page.getByTestId("zoom-marker")).toHaveCount(0);
+  await page.waitForTimeout(5000);
   await page.getByRole("button", { name: "Stop recording" }).first().click();
   await landOnRecording(page);
 }
@@ -55,15 +58,14 @@ async function storedRecordingScreen(page: Page): Promise<string> {
   );
 }
 
-test("zoom marker, speed, GIF export, project file and video import", async ({ page }, info) => {
-  await recordWithMarker(page);
+test("speed, GIF export, project file and video import", async ({ page }, info) => {
+  await recordScreen(page);
   const screenB64 = await storedRecordingScreen(page);
   await page.getByRole("link", { name: /Edit & export/ }).click();
   await expect(page.getByTestId("clip-0")).toBeVisible();
 
-  // The "zoom here" mark became a manual zoom.
-  await expect(page.getByTestId("zoom-0")).toBeVisible();
-  await expect(page.getByTestId("zoom-0")).toHaveAttribute("title", /2× zoom$/);
+  // No automatic zooms.
+  await expect(page.getByTestId("zoom-0")).toHaveCount(0);
 
   // Speed: select the clip and play it at 2×; the edited length halves.
   const before = (await page.getByTestId("edit-duration").textContent())!.split("/")[1].trim();
@@ -113,7 +115,7 @@ test("zoom marker, speed, GIF export, project file and video import", async ({ p
   await expect(page.getByText("imported clip")).toBeVisible();
 });
 
-test("help, FAQ, privacy and terms pages, footer credit, and the extension download", async ({ page, request }) => {
+test("help, FAQ, privacy and terms pages and footer credit", async ({ page }) => {
   await page.goto("/");
   const footer = page.getByTestId("site-footer");
   await expect(footer).toContainText("Vibecoded by Nishkam");
@@ -127,16 +129,12 @@ test("help, FAQ, privacy and terms pages, footer credit, and the extension downl
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
   }
 
-  await page.goto("/help");
-  await page.getByText(/Advanced: cursor for browser-tab recordings/).click();
-  const dl = page.getByRole("link", { name: "Download the extension" });
-  await expect(dl).toBeVisible();
-  const href = (await dl.getAttribute("href"))!;
-  const res = await request.get(href);
-  expect(res.ok()).toBe(true);
-  const zip = await res.body();
-  expect(zip.subarray(0, 2).toString()).toBe("PK");
-  expect(zip.includes(Buffer.from("capturekit-extension/manifest.json"))).toBe(true);
+  // No extension or automatic-zoom leftovers anywhere on the help pages.
+  for (const path of ["/help", "/faq"]) {
+    await page.goto(path);
+    await expect(page.getByText(/extension/i)).toHaveCount(0);
+    await expect(page.getByText(/automatic zoom/i)).toHaveCount(0);
+  }
 });
 
 /** A 2-second 440 Hz mono WAV. */
@@ -180,7 +178,7 @@ test("image annotation and a music track: shown in the preview and mixed into th
   await page.waitForTimeout(500);
   const frame = () => page.getByTestId("editor-canvas").evaluate((c: HTMLCanvasElement) => c.toDataURL("image/png"));
   const before = await frame();
-  await page.getByTestId("add-image-annotation").setInputFiles(path.resolve("extension/icons/icon-128.png"));
+  await page.getByTestId("add-image-annotation").setInputFiles(path.resolve("docs/images/record.jpg"));
   await expect(page.getByTestId("annotation-list").or(page.getByText("Drag it on the preview to move it"))).toBeVisible();
   await page.waitForTimeout(500);
   expect(await frame()).not.toBe(before);
@@ -211,104 +209,80 @@ test("image annotation and a music track: shown in the preview and mixed into th
   expect(hasAudio).toBeGreaterThan(0);
 });
 
-test("auto zoom finds the cursor and click in a real encoded video and zooms in before the click", async ({ page }, info) => {
-  await page.goto("/recordings");
-  // Make a 6 s "screen recording": desktop-like UI, an OS-style cursor that moves to a button,
-  // stops, and a menu opens next to it (the click), then moves away. Encoded by the browser like a real recording.
-  const b64 = await page.evaluate(async () => {
-    const W = 1280;
-    const H = 720;
-    const c = document.createElement("canvas");
-    c.width = W;
-    c.height = H;
-    const g = c.getContext("2d")!;
-    const arrow = (x: number, y: number, h: number) => {
-      const pts = [[0, 0], [0, 0.8], [0.2, 0.62], [0.33, 0.92], [0.45, 0.86], [0.33, 0.58], [0.58, 0.58]];
-      g.beginPath();
-      pts.forEach(([px, py], i) => (i ? g.lineTo(x + px * h, y + py * h) : g.moveTo(x + px * h, y + py * h)));
-      g.closePath();
-      g.fillStyle = "#fff";
-      g.fill();
-      g.lineWidth = 1.5;
-      g.strokeStyle = "#000";
-      g.stroke();
-    };
-    const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.min(1, Math.max(0, k));
-    const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm;codecs=vp8", videoBitsPerSecond: 4_000_000 });
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (e) => chunks.push(e.data);
-    const done = new Promise((r) => (rec.onstop = r));
-    rec.start(500);
-    const t0 = performance.now();
-    await new Promise<void>((resolve) => {
-      const frame = () => {
-        const t = performance.now() - t0;
-        g.fillStyle = "#eef2f7";
-        g.fillRect(0, 0, W, H);
-        g.fillStyle = "#dde3ea";
-        g.fillRect(0, 0, 240, H);
-        g.fillStyle = "#8a96a6";
-        for (let k = 0; k < 16; k++) g.fillRect(300, 60 + k * 36, 380 + ((k * 97) % 400), 10);
-        g.fillStyle = "#10b981";
-        g.fillRect(780, 380, 140, 40); // the button
-        if (t >= 1900) {
-          g.fillStyle = "#ffffff";
-          g.fillRect(800, 430, 260, 200); // menu
-          g.fillStyle = "#334155";
-          for (let k = 0; k < 5; k++) g.fillRect(820, 450 + k * 34, 180, 10);
-        }
-        const [x, y] =
-          t < 1500 ? [lerp(200, 830, t / 1500), lerp(150, 395, t / 1500)] : t < 3500 ? [830, 395] : [lerp(830, 350, (t - 3500) / 1000), lerp(395, 560, (t - 3500) / 1000)];
-        arrow(x, y, 22);
-        if (t < 6000) requestAnimationFrame(frame);
-        else resolve();
-      };
-      frame();
-    });
-    rec.stop();
-    await done;
-    const blob = new Blob(chunks, { type: "video/webm" });
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    let s = "";
-    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-    return btoa(s);
-  });
-  await mkdir(info.outputDir, { recursive: true });
-  const file = path.join(info.outputDir, "click demo.webm");
-  await writeFile(file, Buffer.from(b64, "base64"));
+const frameOf = (page: Page) => page.getByTestId("editor-canvas").evaluate((c: HTMLCanvasElement) => c.toDataURL("image/png"));
 
-  await page.getByTestId("import-video").setInputFiles(file);
-  await page.waitForURL(/\/editor\?id=/, { timeout: 30_000 });
-  await page.getByRole("button", { name: "Zoom", exact: true }).click();
-  await expect(page.getByTestId("activity-analysis")).toHaveCount(0, { timeout: 60_000 });
-  await expect(page.getByText(/Based on your cursor/)).toBeVisible();
-  await expect(page.getByTestId("zoom-0")).toBeVisible();
-  await expect(page.getByTestId("zoom-1")).toHaveCount(0); // one meaningful zoom, not several
-
-  // The zoom is fully in before the click (~1.5–1.9 s) and starts during the approach.
-  await page.waitForTimeout(800);
+async function storedProjectOf(page: Page): Promise<Record<string, unknown>> {
   const id = new URL(page.url()).searchParams.get("id");
-  const seg = await page.evaluate(
+  return page.evaluate(
     (rid) =>
-      new Promise<{ start: number; end: number; x: number; y: number; mode: string }>((resolve, reject) => {
+      new Promise<Record<string, unknown>>((resolve, reject) => {
         const req = indexedDB.open("capturekit");
         req.onsuccess = () => {
           const g = req.result.transaction("projects").objectStore("projects").get(rid!);
-          g.onsuccess = () => resolve(g.result.zoom.segments[0]);
+          g.onsuccess = () => resolve(g.result);
           g.onerror = () => reject(g.error);
         };
       }),
     id,
   );
-  expect(seg.start + 700).toBeLessThanOrEqual(1950);
-  expect(seg.start).toBeGreaterThan(0);
-  expect(seg.end).toBeGreaterThan(2500);
-  // Steady on the click spot (the button at ~830, 395 of 1280×720), not following the cursor.
-  expect((seg as { mode?: string }).mode).toBe("fixed");
-  expect(seg.x).toBeCloseTo(830 / 1280, 1);
-  expect(seg.y).toBeCloseTo(395 / 720, 1);
-  // Cursor panel: no extension prompt; the cursor was found in the video.
-  await page.getByRole("button", { name: "Cursor", exact: true }).click();
-  await expect(page.getByText(/Found in your video/)).toBeVisible();
-  await expect(page.getByText(/extension/i)).toHaveCount(0);
+}
+
+test("multicam layout switching, screen and webcam layer sliders, and export", async ({ page }) => {
+  await recordScreen(page, true);
+  await page.getByRole("link", { name: /Edit & export/ }).click();
+  await expect(page.getByTestId("clip-0")).toBeVisible();
+  const ruler = (await page.getByTestId("timeline-ruler").boundingBox())!;
+  const seekTo = async (f: number) => {
+    await page.mouse.click(ruler.x + ruler.width * f, ruler.y + ruler.height / 2);
+    await page.waitForTimeout(500);
+  };
+
+  // Layout lane starts as screen + webcam for the whole video.
+  await expect(page.getByTestId("scene-pip")).toHaveCount(1);
+  await seekTo(0.7);
+  const pip = await frameOf(page);
+
+  // Switch to full webcam from 50% (key 2), then screen only from 80% (Layout panel).
+  await seekTo(0.5);
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("scene-camera")).toHaveCount(1);
+  await seekTo(0.7);
+  expect(await frameOf(page)).not.toBe(pip);
+  await page.getByRole("button", { name: "Layout", exact: true }).click();
+  await expect(page.getByRole("radio", { name: /Full webcam/ })).toHaveAttribute("aria-checked", "true");
+  await seekTo(0.85);
+  await page.getByRole("radio", { name: /Screen only/ }).click();
+  await expect(page.getByTestId("scene-screen")).toHaveCount(1);
+  await page.waitForTimeout(800);
+  let p = await storedProjectOf(page);
+  expect((p.scenes as Array<{ layout: string }>).map((c) => c.layout)).toEqual(["camera", "screen"]);
+
+  // Screen layer sliders change the frame and are saved.
+  await seekTo(0.2);
+  const plain = await frameOf(page);
+  await page.getByRole("button", { name: "Screen", exact: true }).click();
+  await page.getByLabel("Size").fill("0.7");
+  await page.getByLabel("Horizontal position").fill("0.1");
+  await page.getByLabel("Opacity").fill("0.6");
+  await page.getByLabel("Rotation").fill("12");
+  await page.waitForTimeout(400);
+  expect(await frameOf(page)).not.toBe(plain);
+
+  // Webcam: its own shape, position, opacity and rotation.
+  await page.getByRole("button", { name: "Webcam", exact: true }).click();
+  await page.getByRole("radio", { name: "Webcam shape: Rectangle" }).click();
+  await page.getByLabel("Horizontal position").fill("0.2");
+  await page.getByLabel("Webcam opacity").fill("0.5");
+  await page.getByLabel("Webcam rotation").fill("-15");
+  await page.waitForTimeout(800);
+  p = await storedProjectOf(page);
+  expect(p.screen).toMatchObject({ scale: 0.7, x: 0.1, opacity: 0.6, rotation: 12 });
+  expect(p.webcam).toMatchObject({ shape: "rect", x: 0.2, opacity: 0.5, rotation: -15 });
+
+  // Export follows the layout.
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: /^720p/ }).click();
+  await dialog.getByRole("button", { name: /^Export (WebM|MP4)$/ }).click();
+  await expect(dialog.getByTestId("export-result")).toBeVisible({ timeout: 90_000 });
 });

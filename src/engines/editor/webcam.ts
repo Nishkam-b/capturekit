@@ -23,6 +23,10 @@ export interface WebcamStyle {
   roundness: number;
   /** Shrinks the webcam while the screen is zoomed in, so it covers less of the action. */
   shrinkOnZoom: boolean;
+  /** 0..1 */
+  opacity: number;
+  /** Degrees (−180…180). */
+  rotation: number;
 }
 
 export const DEFAULT_WEBCAM: WebcamStyle = {
@@ -37,7 +41,9 @@ export const DEFAULT_WEBCAM: WebcamStyle = {
   mirror: false,
   margin: 0.04,
   roundness: 0.18,
-  shrinkOnZoom: true,
+  shrinkOnZoom: false,
+  opacity: 1,
+  rotation: 0,
 };
 
 /** From the recording-time layout (corner + S/M/L) to an editor style. */

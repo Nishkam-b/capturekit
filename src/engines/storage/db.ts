@@ -1,4 +1,3 @@
-import type { CursorTrack } from "../cursor/types";
 import type { ScreenshotProject } from "../screenshot/project";
 import type { EditProject } from "../editor/project";
 import type { RecordingMeta } from "../shared/types";
@@ -10,6 +9,7 @@ export const MEDIA = "media";
 const PROJECTS = "projects";
 export const CHUNKS = "chunks";
 export const PENDING = "pending";
+/** Legacy store (cursor data from v0.4–v0.11); kept so old data is still cleaned up on delete. */
 export const CURSOR = "cursor";
 export const SCREENSHOTS = "screenshots";
 
@@ -215,21 +215,6 @@ export async function requestPersistentStorage(): Promise<boolean> {
   }
 }
 
-export async function saveCursorTrack(track: CursorTrack): Promise<void> {
-  const db = await openDb();
-  const tx = db.transaction(CURSOR, "readwrite");
-  tx.objectStore(CURSOR).put(track);
-  await done(tx);
-}
-
-export async function getCursorTrack(recordingId: string): Promise<CursorTrack | null> {
-  const db = await openDb();
-  return ((await request(db.transaction(CURSOR).objectStore(CURSOR).get(recordingId))) as CursorTrack) ?? null;
-}
-
-// ---------------------------------------------------------------- screenshots
-
-/** Creates or replaces a screenshot project, optionally with its source image. */
 export async function saveScreenshotProject(project: ScreenshotProject, image?: Blob): Promise<void> {
   const db = await openDb();
   const tx = db.transaction(image ? [SCREENSHOTS, MEDIA] : [SCREENSHOTS], "readwrite");

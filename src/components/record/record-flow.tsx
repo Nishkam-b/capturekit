@@ -22,8 +22,6 @@ import { createId, extensionForMime, formatDuration, toFileStem, defaultRecordin
 import { deleteRecording } from "@/engines/storage/db";
 import { StorageSink, lockName } from "@/engines/storage/recording-store";
 import { AUTO_STOP_SECONDS, LOW_SPACE_SECONDS, expectedBytesPerSecond, freeBytes, secondsLeft } from "@/lib/storage-budget";
-import { ExtensionCursorProvider, detectExtension, onExtensionZoomMarker } from "@/engines/cursor/extension-provider";
-import { CursorRecorder } from "@/lib/cursor-recorder";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { persistSession, type CapturedScreenshot } from "@/lib/save-recording";
 import { Logo } from "../app-shell";
@@ -76,14 +74,7 @@ export function RecordFlow() {
   const lastQuotaCheck = useRef(0);
   const lowSpaceWarned = useRef(false);
   const [setupSpace, setSetupSpace] = useState<{ minutes: number } | null>(null);
-  /** Cursor extension version; undefined while checking, null if not installed. */
-  const [extVersion, setExtVersion] = useState<string | null | undefined>(undefined);
-  const [cursorStatus, setCursorStatus] = useState<"off" | "connecting" | "on" | "failed" | "unsupported">("off");
-  const providerRef = useRef<ExtensionCursorProvider | null>(null);
-  const cursorRecRef = useRef<CursorRecorder | null>(null);
   const startedAt = useRef<Date | null>(null);
-  const zoomMarkersRef = useRef<number[]>([]);
-  const [zoomMarkerCount, setZoomMarkerCount] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -296,8 +287,6 @@ export function RecordFlow() {
     setShotCount(0);
     setMicMuted(false);
     startedAt.current = new Date();
-    zoomMarkersRef.current = [];
-    setZoomMarkerCount(0);
     setSession(s);
     setSessionState(s.state);
     setStarting(false);
@@ -312,32 +301,6 @@ export function RecordFlow() {
     } catch {
       s.warn("Couldn't save to browser storage while recording, so this recording is kept in memory. Keep this tab open until it's saved.");
     }
-    // Cursor telemetry (extension, browser tabs only). Runs alongside; never blocks recording.
-    cursorRecRef.current = null;
-    providerRef.current = null;
-    const pickedSurface = (ds as { displaySurface?: string }).displaySurface;
-    if (extVersion && pickedSurface === "browser") {
-      const provider = new ExtensionCursorProvider();
-      const rec = new CursorRecorder(id, s, "extension");
-      providerRef.current = provider;
-      cursorRecRef.current = rec;
-      setCursorStatus("connecting");
-      void provider.start(s.displayTrack, (batch) => rec.add(batch)).then((ok) => {
-        if (providerRef.current !== provider) return;
-        setCursorStatus(ok ? "on" : "failed");
-        if (!ok) {
-          s.warn(
-            provider.failure === "no-handle-support"
-              ? "Cursor tracking needs Chrome or Edge 116 or newer, so this recording has no cursor data."
-              : "Cursor tracking couldn't identify the shared tab, so this recording has no cursor data. Try reloading that tab before recording.",
-          );
-        }
-      });
-    } else if (extVersion && pickedSurface && pickedSurface !== "browser") {
-      setCursorStatus("unsupported");
-    } else {
-      setCursorStatus("off");
-    }
     if (prefs.countdown) {
       setCountdown(3);
       setPhase("countdown");
@@ -345,17 +308,7 @@ export function RecordFlow() {
       await s.start();
       setPhase("recording");
     }
-  }, [starting, caps, prefs, systemAudioAvailable, micStream, camStream, openPip, extVersion]);
-
-  // ---- Is the cursor-tracking extension installed? (re-checked when returning to setup)
-  useEffect(() => {
-    if (phase !== "setup") return;
-    let cancelled = false;
-    void detectExtension().then((v) => !cancelled && setExtVersion(v));
-    return () => {
-      cancelled = true;
-    };
-  }, [phase]);
+  }, [starting, caps, prefs, systemAudioAvailable, micStream, camStream, openPip]);
 
   // ---- Countdown
   useEffect(() => {
@@ -426,19 +379,11 @@ export function RecordFlow() {
       releaseLock.current?.();
       releaseLock.current = null;
     };
-    const stopCursor = async () => {
-      providerRef.current?.stop();
-      providerRef.current = null;
-      const rec = cursorRecRef.current;
-      if (rec) await rec.save();
-      return rec && rec.count > 0 ? { source: "extension" as const, events: rec.count } : null;
-    };
     session.finished.then(
       async (result) => {
         closePip();
         if (mounted.current) setPhase("saving");
         try {
-          const cursor = await stopCursor();
           const id = await persistSession({
             id: recId ?? createId(),
             result,
@@ -446,13 +391,11 @@ export function RecordFlow() {
             webcam: prefs.webcam,
             memoryShots: shotFallback.current,
             startedAt: startedAt.current ?? new Date(),
-            cursor,
-            zoomMarkers: zoomMarkersRef.current,
           });
           release();
           // If the user navigated away mid-recording we still save, but don't redirect them.
-          // Straight into the editor: zooms, background and framing are applied automatically.
-          if (mounted.current) router.push(`/editor?id=${encodeURIComponent(id)}&new=1`);
+          // Straight into the editor, framed and ready to export.
+          if (mounted.current) router.push(`/editor?id=${encodeURIComponent(id)}`);
         } catch (err) {
           release(); // chunks stay in storage and can be recovered from the dashboard
           if (!mounted.current) return;
@@ -465,9 +408,6 @@ export function RecordFlow() {
       },
       (err: unknown) => {
         // Cancelled or failed: nothing to keep.
-        providerRef.current?.stop();
-        providerRef.current = null;
-        cursorRecRef.current = null;
         if (recId) void deleteRecording(recId).catch(() => undefined);
         release();
         if (!mounted.current) return;
@@ -540,22 +480,6 @@ export function RecordFlow() {
     }
   }, [session]);
 
-  /** "Zoom here" marks: become manual zoom segments in the editor. */
-  const addZoomMarker = useCallback(() => {
-    if (!session || session.state !== "recording") return;
-    const atMs = Math.round(session.elapsedMs());
-    const list = zoomMarkersRef.current;
-    if (list.length && atMs - list[list.length - 1] < 400) return; // same press seen twice (page + extension)
-    list.push(atMs);
-    setZoomMarkerCount(list.length);
-  }, [session]);
-
-  // The extension's browser-wide shortcut (works while another tab has focus).
-  useEffect(() => {
-    if (phase !== "recording") return;
-    return onExtensionZoomMarker(addZoomMarker);
-  }, [phase, addZoomMarker]);
-
   // ---- Keyboard shortcuts (work in this tab and in the pop-out controls window).
   useEffect(() => {
     if (phase !== "recording" || !session) return;
@@ -570,15 +494,12 @@ export function RecordFlow() {
       } else if (e.code === "KeyC") {
         e.preventDefault();
         void takeScreenshot();
-      } else if (e.code === "KeyZ") {
-        e.preventDefault();
-        addZoomMarker();
       }
     };
     const targets = [window, pipWindow].filter((w): w is Window => !!w);
     targets.forEach((t) => t.addEventListener("keydown", onKey));
     return () => targets.forEach((t) => t.removeEventListener("keydown", onKey));
-  }, [phase, session, pipWindow, takeScreenshot, addZoomMarker]);
+  }, [phase, session, pipWindow, takeScreenshot]);
 
   const toggleMic = useCallback(() => {
     if (!session) return;
@@ -605,11 +526,9 @@ export function RecordFlow() {
         onResume: () => session.resume(),
         onStop: () => void session.stop(),
         onScreenshot: () => void takeScreenshot(),
-        onZoomMarker: addZoomMarker,
-        zoomMarkers: zoomMarkerCount,
         onToggleMic: toggleMic,
       },
-    [session, sessionState, elapsed, micMuted, shotCount, takeScreenshot, toggleMic, addZoomMarker, zoomMarkerCount],
+    [session, sessionState, elapsed, micMuted, shotCount, takeScreenshot, toggleMic],
   );
 
   if (!caps) return <div className="p-10 text-sm text-muted">Checking your browser…</div>;
@@ -631,7 +550,6 @@ export function RecordFlow() {
         starting={starting}
         onStart={onStart}
         space={setupSpace}
-        cursorExtension={extVersion}
       />
     );
   }
@@ -644,21 +562,6 @@ export function RecordFlow() {
     <div className="fixed inset-0 z-50 flex flex-col bg-subtle" ref={stageRef}>
       <header className="flex items-center justify-between border-b border-line bg-white px-4 py-3 sm:px-6">
         <Logo />
-        {cursorStatus !== "off" && (phase === "recording" || phase === "countdown") && (
-          <span
-            data-testid="cursor-status"
-            className={
-              cursorStatus === "on"
-                ? "rounded-full bg-primary-light px-2.5 py-1 text-xs font-medium text-primary-strong"
-                : "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-muted"
-            }
-          >
-            {cursorStatus === "on" && "Cursor tracking on"}
-            {cursorStatus === "connecting" && "Connecting cursor tracking…"}
-            {cursorStatus === "failed" && "No cursor tracking"}
-            {cursorStatus === "unsupported" && "Cursor tracking: browser tabs only"}
-          </span>
-        )}
         {phase === "recording" && caps.popOutControls && !pipWindow && (
           <Button variant="secondary" size="sm" onClick={() => void openPip()}>
             <PictureInPicture2 className="size-4" /> Pop out controls

@@ -46,9 +46,8 @@ export interface RecordingMeta {
   camera: (MediaTrackInfo & { layout: WebcamLayout }) | null;
   audio: { mic: boolean; system: boolean };
   screenshots: ScreenshotMeta[];
-  /** Cursor telemetry recorded alongside (stored separately in the `cursor` store). */
-  cursor?: { source: "extension" | "native" | "video-cursor" | "video-activity" | "video"; events: number } | null;
-  /** Moments (recording time, ms) the user marked "zoom here" while recording. */
+  /** Legacy (v0.4–v0.11 cursor data and zoom marks); no longer used. */
+  cursor?: unknown;
   zoomMarkers?: number[];
   warnings: string[];
 }

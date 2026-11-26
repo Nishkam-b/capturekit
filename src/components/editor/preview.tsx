@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { PreviewPlayer, type PreviewMode } from "@/engines/editor/player";
-import type { CursorBundle } from "@/engines/cursor/path";
 import type { Annotation } from "@/engines/annotations/types";
 import { clampCrop, type EditProject, type NormRect } from "@/engines/editor/project";
 import type { WebcamStyle } from "@/engines/editor/webcam";
@@ -17,7 +16,6 @@ interface Props {
   onPlayer: (p: PreviewPlayer | null) => void;
   onCrop: (crop: NormRect, transient: boolean) => void;
   onCropCommit: (before: NormRect) => void;
-  cursor: CursorBundle | null;
   backgroundImage?: BackgroundImage | null;
   overlayImages?: ReadonlyMap<string, CanvasImageSource>;
   /** File URLs for project.audioTracks. */
@@ -37,7 +35,7 @@ interface Props {
 }
 
 /** Canvas preview of the edit, plus the crop overlay in crop mode. */
-export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, cursor, backgroundImage = null, overlayImages, audioUrls, onPick, webcamEdit, annotationEdit }: Props) {
+export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop, onCropCommit, backgroundImage = null, overlayImages, audioUrls, onPick, webcamEdit, annotationEdit }: Props) {
   const screenRef = useRef<HTMLVideoElement>(null);
   const camRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,10 +93,6 @@ export function Preview({ screenUrl, cameraUrl, project, mode, onPlayer, onCrop,
   useEffect(() => {
     player?.setMode(mode);
   }, [player, mode]);
-
-  useEffect(() => {
-    player?.setCursor(cursor);
-  }, [player, cursor]);
 
   useEffect(() => {
     player?.setBackgroundImage(backgroundImage);

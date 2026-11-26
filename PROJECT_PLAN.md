@@ -238,3 +238,12 @@ into a chat or document app; check the device frame on a portrait phone screensh
 | Editor opens after recording with polished defaults and an Export bar | ✅ | e2e helpers now land on the editor |
 | No extension prompts in setup/editor | ✅ | `features.spec.ts` checks the Cursor panel; extension test updated |
 | Real desktop recording with a physical mouse | ⬜ | needs a manual check (automation can't move the real pointer) |
+
+## Phase 10 — Simple recorder, manual editing, multicam (v0.12.0)
+| Task | Status | Evidence |
+|---|---|---|
+| Remove automatic zoom, cursor detection/tracking, extension, zoom marks | ✅ | code and tests removed; `features.spec.ts` checks the recorder has no zoom marker and Help/FAQ have no extension or auto-zoom text |
+| Manual zoom: amount + position sliders, click-to-centre, steady view | ✅ | `zoom.spec.ts` (unit + e2e) |
+| Screen layer: size, position, opacity, rotation, corner curve | ✅ | unit (layout geometry) + `features.spec.ts` |
+| Webcam: shape, size, position, opacity, rotation, corner curve | ✅ | `features.spec.ts` |
+| Multicam layout track (screen + webcam / full webcam / screen only) | ✅ | unit (`sceneAt`, `setSceneAt`) + `features.spec.ts` (keys and panel, lane, saved, export) |

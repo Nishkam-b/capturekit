@@ -151,7 +151,7 @@ test.describe("speed regions", () => {
   });
 });
 
-test.describe("webcam and cursor looks", () => {
+test.describe("webcam looks", () => {
   test("webcam margin moves the bubble off the edge", async () => {
     const { webcamBox } = await import("../../src/engines/editor/webcam");
     const tight = webcamBox({ x: 1, y: 1, size: 0.2, shape: "circle", margin: 0 }, 1000, 1000);
@@ -170,12 +170,6 @@ test.describe("webcam and cursor looks", () => {
     expect(z.y + z.h).toBe(960);
   });
 
-  test("click bounce dips then settles back to full size", async () => {
-    const { bounceScale } = await import("../../src/engines/cursor/render");
-    expect(bounceScale(0)).toBe(1);
-    expect(bounceScale(100)).toBeLessThan(0.9);
-    expect(bounceScale(400)).toBe(1);
-  });
 });
 
 test.describe("extra audio tracks", () => {
@@ -186,5 +180,33 @@ test.describe("extra audio tracks", () => {
     expect(trackPositionAt(t, 2500)).toBeCloseTo(0.5);
     expect(trackPositionAt(t, 5000)).toBeNull();
     expect(trackPositionAt({ ...t, loop: true }, 6500)).toBeCloseTo(1.5);
+  });
+});
+
+test.describe("screen layer and multicam layout", () => {
+  test("screen size and position move the frame; opacity and rotation don't change geometry", async () => {
+    const { frameLayout } = await import("../../src/engines/editor/layout");
+    const { createProject, DEFAULT_SCREEN } = await import("../../src/engines/editor/project");
+    const meta = { id: "r", durationMs: 1000, camera: null } as unknown as Parameters<typeof createProject>[0];
+    const p = createProject(meta);
+    const base = frameLayout(p, 1920, 1080, 1920, 1080, false);
+    expect(base.dst).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+    const half = frameLayout({ ...p, screen: { ...DEFAULT_SCREEN, scale: 0.5, x: 0.1, y: -0.1, opacity: 0.3, rotation: 45 } }, 1920, 1080, 1920, 1080, false);
+    expect(half.dst).toEqual({ x: 480 + 192, y: 270 - 108, w: 960, h: 540 });
+  });
+
+  test("layout switches: before the first switch it's screen + webcam; repeats are merged", async () => {
+    const { sceneAt, setSceneAt, usesCameraScene } = await import("../../src/engines/editor/project");
+    let scenes = setSceneAt([], 3000, "camera", "a");
+    scenes = setSceneAt(scenes, 6000, "screen", "b");
+    expect(sceneAt(scenes, 0)).toBe("pip");
+    expect(sceneAt(scenes, 3000)).toBe("camera");
+    expect(sceneAt(scenes, 5999)).toBe("camera");
+    expect(sceneAt(scenes, 9000)).toBe("screen");
+    expect(usesCameraScene({ scenes })).toBe(true);
+    // switching again at the same moment replaces it; switching to what's already showing adds nothing
+    scenes = setSceneAt(scenes, 3050, "screen", "c");
+    expect(scenes.map((c) => [c.at, c.layout])).toEqual([[3050, "screen"]]);
+    expect(setSceneAt([], 2000, "pip", "d")).toEqual([]);
   });
 });

@@ -126,53 +126,11 @@ throttle timers). It warns under 2 min and stops cleanly under 20 s so the recor
 `navigator.storage.persist()` is requested after the first save so the browser is
 less likely to evict recordings. Old v1/v2 recordings (single blob in `media`) remain readable.
 
-## 4. Cursor telemetry (Phase 3, built)
+## 4. Cursor telemetry (removed in v0.12)
 
-`getDisplayMedia` does **not** expose cursor coordinates, and tab captures don't even
-contain the cursor. Cursor data comes from pluggable **telemetry providers**
-(`src/engines/cursor/types.ts`) and is stored separately from the video:
-
-```ts
-interface CursorTelemetryProvider {
-  source: 'extension' | 'native';
-  start(track: MediaStreamTrack, onEvents: (e: { perfMs, x, y, kind }[]) => void): Promise<boolean>;
-  stop(): void;
-}
-```
-
-**Extension provider (browser tabs)**, `extension/` + `extension-provider.ts`:
-
-```
-CaptureKit tab                       extension                         recorded tab
-──────────────                       ─────────                         ────────────
-postMessage(arm, nonce) ──► content-script bridge ──port──► background ──► every tab: setCaptureHandleConfig(
-                                                                             "capturekit:<nonce>:<tabId>")
-track.getCaptureHandle()  ◄── browser exposes the shared tab's handle ◄──────────────────────┘
-postMessage(track, tabId) ──► bridge ──► background ──► that tab: start listening; others: clear handle
-window "message" (events) ◄── bridge ◄── background ◄── pointermove/down/up/leave, batched every 50 ms
-```
-
-- An **origin allow-list** in the content script means only CaptureKit pages can drive it.
-- **Positions** are normalised to the tab's viewport, which is exactly what tab capture records.
-- **Timestamps** are `performance.timeOrigin + now()` in the tab, converted to the app's `performance.now()`
-  and then to *active* recording time by `ActiveClock.toActive()`, which drops events while paused.
-- MV3 workers can be stopped: routing state lives in `chrome.storage.session`, and the bridge reconnects and
-  replays the session on disconnect.
-
-**Storage:** `CursorRecorder` saves the packed events (`[t, x, y, kind]…`) to the `cursor` store every
-~5 s during recording (crash-safe) and on stop. `RecordingMeta.cursor` holds the event count.
-
-**Rendering:** `buildCursorPath()` resamples events at 60 Hz with linear gap-filling and an optional
-critically damped spring (smoothing), plus click times and idle time. `cursorStateAt(t)` is O(1).
-`drawCursor()` draws the click ripple, highlight, arrow (pressed state) and the hide-when-still fade.
-`drawFrame()` maps source coordinates through crop/fit/padding (`sourcePointMapper`) and clips to the
-video area. Preview and export call the same code, using the source time of the current frame plus the
-user's sync offset.
-
-**Native provider:** a planned Tauri companion for screen and window recordings (desktop-wide cursor).
-
-The zoom engine (Phase 4) will consume the same events to generate zoom keyframes; recordings without
-telemetry will offer manual keyframes only and say why.
+v0.4–v0.11 recorded cursor data with a browser extension and later detected the cursor in the video to place
+zooms automatically. Both were removed in v0.12: the recorder is a plain recorder and all zooms are manual. Old
+data in the `cursor` IndexedDB store is ignored (and still cleaned up when a recording is deleted).
 
 ## 5. Browser support
 
@@ -230,33 +188,17 @@ src/engines/editor/
 - **Next:** a WebCodecs pipeline (decode → draw → `VideoEncoder` → mux) for faster-than-real-time,
   background-safe export; it needs a demuxer/muxer library (to be chosen and justified in §6).
 
-## 8. Smart zoom (Phase 4)
+## 8. Zoom, layers and multicam layout (v0.12)
 
-```
-src/engines/zoom/
-  types.ts   ZoomSegment { start, end (source ms), level, mode: follow|fixed, x, y, auto, key } + ZoomSettings
-  detect.ts  findInteractions → detectZoomSegments → withAutoSegments (unit-tested)
-  camera.ts  ease, segmentWeight, zoomAt(t) → { scale, cx, cy }, zoomRect (unit-tested)
-```
-
-- **Segments, not keyframes.** A zoom ramps in over `transitionMs` from `start`, holds, and ramps out from `end`
-  (ease-in-out cubic). At any time, scale = max over active segments, and the centre is weighted by each
-  segment's influence, so overlapping or adjacent zooms blend without jumps. Times are source ms, so trimming
-  and cutting never shift a zoom onto the wrong content.
-- **Auto detection** uses clicks, plus (opt-in) pauses of at least 1 s after at least 8% of frame travel. A pause
-  only counts when a later event proves the cursor stopped. Interactions within 2.5 s form one cluster; each
-  cluster becomes a zoom that's fully in by the first interaction and holds `holdMs` after the last. Zooms whose
-  gap after zoom-out is under 1.2 s are merged. Plain movement never produces an interaction.
-- **Regeneration** (`withAutoSegments`) replaces only `auto` segments, keeps manual ones (and auto ones that
-  would overlap them out), and skips keys the user dismissed. Editing an auto zoom clears its `auto` flag.
-- **Follow camera:** the editor builds a second, much calmer cursor path (spring smoothing 0.75–0.99) for the
-  camera. `zoomRect` takes 1/scale of the layout's (cropped) source rect around the camera point and clamps it
-  inside, so the view never shows outside the frame. At 1× this is the full frame.
-- **Rendering:** `drawFrame(…, cursor, zoom)` draws the zoomed source rect into the same destination box; the cursor
-  is mapped through the zoomed rect and scaled by √scale; the webcam overlay isn't zoomed. Preview (`PreviewPlayer`)
-  and export call the same code per frame with the frame's source time.
-- **Picking a focus point:** `outputToSource()` inverts the unzoomed layout, so a click on the preview canvas becomes
-  a normalised source point.
+- **Zoom** (`src/engines/zoom`): manual segments `{start, end, level 1–4, x, y}` in source time. `zoomAt()` eases
+  each zoom in and out (`transitionMs`) and holds a steady view on (x, y); overlapping zooms blend. `zoomRect()`
+  keeps the view inside the (cropped) frame. `normalizeZoom()` drops automatic zooms from older projects.
+- **Screen layer** (`project.screen`): scale, x/y offset, opacity, rotation. Scale and offset change the layout's
+  destination rect (so overlays line up); opacity and rotation are applied as a canvas transform while drawing.
+- **Webcam layer**: shape, size, position, opacity, rotation, corner curve, border, shadow, mirror.
+- **Multicam layout** (`project.scenes`): switches `{at, layout}` in source time, layout = `pip` (screen + webcam),
+  `camera` (full webcam) or `screen`. `sceneAt(t)` picks the layout per frame inside `drawFrame()`, so preview, MP4/WebM
+  and GIF export all follow it. `setSceneAt()` replaces a switch within 150 ms and drops switches that change nothing.
 
 ## 9. Webcam styling & annotations (Phase 5)
 

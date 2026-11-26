@@ -1,27 +1,40 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Camera, Crop, MousePointer2, PaintBucket, Scissors, Shapes, Volume2, ZoomIn } from "lucide-react";
-import { ASPECT_RATIOS, BACKGROUNDS, BG_BLURRED, BG_IMAGE, FULL_CROP, SPEEDS, type AspectPreset, type BackgroundPreset, type EditProject } from "@/engines/editor/project";
+import { Camera, Columns2, Crop, Monitor, PaintBucket, Scissors, Shapes, Volume2, ZoomIn } from "lucide-react";
+import {
+  ASPECT_RATIOS,
+  BACKGROUNDS,
+  BG_BLURRED,
+  BG_IMAGE,
+  DEFAULT_SCREEN,
+  FULL_CROP,
+  SCENE_LABEL,
+  SPEEDS,
+  type AspectPreset,
+  type BackgroundPreset,
+  type EditProject,
+  type LayerTransform,
+  type SceneLayout,
+} from "@/engines/editor/project";
 import { clipDuration, clipSpeed, isUntrimmed, setClipSpeed, totalDuration } from "@/engines/editor/timeline";
 import { formatDuration } from "@/engines/shared/format";
-import { ZOOM_LEVELS, type ZoomSegment, type ZoomSettings } from "@/engines/zoom/types";
+import { ZOOM_MAX, ZOOM_MIN, type ZoomSegment, type ZoomSettings } from "@/engines/zoom/types";
 import { ANNOTATION_COLORS, KIND_LABEL, type Annotation, type AnnotationKind } from "@/engines/annotations/types";
 import type { WebcamStyle } from "@/engines/editor/webcam";
 import { Droplets, ImagePlus, Music } from "lucide-react";
 import type { AudioTrack } from "@/engines/editor/audio-tracks";
-import { CURSOR_THEMES } from "@/engines/cursor/render";
-import type { TelemetrySource } from "@/engines/cursor/types";
 import { Button, Toggle, cx } from "../ui";
 
-export type Tool = "trim" | "crop" | "background" | "webcam" | "cursor" | "zoom" | "annotate" | "audio";
+export type Tool = "trim" | "crop" | "screen" | "background" | "webcam" | "layout" | "zoom" | "annotate" | "audio";
 
 const TOOLS: { id: Tool; label: string; icon: typeof Scissors }[] = [
   { id: "trim", label: "Trim & cut", icon: Scissors },
   { id: "crop", label: "Crop & size", icon: Crop },
+  { id: "screen", label: "Screen", icon: Monitor },
   { id: "background", label: "Background", icon: PaintBucket },
   { id: "webcam", label: "Webcam", icon: Camera },
-  { id: "cursor", label: "Cursor", icon: MousePointer2 },
+  { id: "layout", label: "Layout", icon: Columns2 },
   { id: "zoom", label: "Zoom", icon: ZoomIn },
   { id: "annotate", label: "Annotations", icon: Shapes },
   { id: "audio", label: "Audio", icon: Volume2 },
@@ -72,20 +85,20 @@ interface PanelProps {
   onDelete: () => void;
   hasCamera: boolean;
   hasAudio: boolean;
-  /** Number of recorded cursor events (0 = no telemetry). */
-  cursorEvents: number;
-  /** Events driving automatic zoom (precise cursor data or estimated screen activity). */
-  zoomEvents: number;
-  zoomSource: TelemetrySource | null;
-  /** Screen-activity analysis in progress (0..1), or its error. */
-  analysis: { progress: number; error?: string } | null;
-  updateZoom: (patch: Partial<ZoomSettings>, opts?: { transient?: boolean; regenerate?: boolean }) => void;
+  updateZoom: (patch: Partial<ZoomSettings>, opts?: { transient?: boolean }) => void;
   addZoom: () => void;
   editZoom: (id: string, patch: Partial<ZoomSegment>, transient?: boolean) => void;
   deleteZoom: (id: string) => void;
   selectedZoomId: string | null;
   onSelectZoom: (id: string) => void;
   updateWebcam: (patch: Partial<WebcamStyle>, transient?: boolean) => void;
+  updateScreen: (patch: Partial<LayerTransform>, transient?: boolean) => void;
+  /** Multicam: set the layout from the playhead on; remove a switch; layout at the playhead. */
+  switchScene: (layout: SceneLayout) => void;
+  removeScene: (id: string) => void;
+  sceneNow: SceneLayout;
+  /** Moves the playhead to a source time. */
+  onSeekSource: (sourceMs: number) => void;
   /** Object URL of the uploaded background image, if any. */
   backgroundImageUrl: string | null;
   onBackgroundImage: (file: File) => void;
@@ -108,8 +121,9 @@ export function PropertiesPanel(p: PanelProps) {
       {p.tool === "trim" && <TrimPanel {...p} />}
       {p.tool === "crop" && <CropPanel {...p} />}
       {p.tool === "background" && <BackgroundPanel {...p} />}
+      {p.tool === "screen" && <ScreenPanel {...p} />}
       {p.tool === "webcam" && <WebcamPanel {...p} />}
-      {p.tool === "cursor" && <CursorPanel {...p} />}
+      {p.tool === "layout" && <LayoutPanel {...p} />}
       {p.tool === "zoom" && <ZoomPanel {...p} />}
       {p.tool === "annotate" && <AnnotationsPanel {...p} />}
       {p.tool === "audio" && <AudioPanel {...p} />}
@@ -514,256 +528,96 @@ function AudioPanel({ project, update, live, liveStart, liveEnd, hasAudio, addAu
   );
 }
 
-const CURSOR_COLORS = ["#facc15", "#10b981", "#38bdf8", "#f472b6", "#ffffff"];
-
-function CursorPanel({ project, update, live, liveStart, liveEnd, cursorEvents, zoomSource, analysis }: PanelProps) {
-  if (cursorEvents === 0) {
-    return (
-      <Section title="Cursor">
-        {analysis && !analysis.error ? (
-          <p className="text-sm text-muted">Looking for your cursor in the recording… {Math.round(analysis.progress * 100)}%</p>
-        ) : (
-          <>
-            <p className="text-sm text-muted">No cursor was found in this recording.</p>
-            <p className="mt-2 text-xs text-muted">
-              Browser-tab recordings don&apos;t include the mouse pointer. Record your <b>entire screen</b> or a <b>window</b> and
-              CaptureKit finds the cursor in the video for click effects and click-based zoom.
-            </p>
-          </>
-        )}
-      </Section>
-    );
-  }
-  const inVideo = zoomSource === "video-cursor";
-  const c = project.cursor;
-  const set = (patch: Partial<typeof c>) => update({ cursor: { ...c, ...patch } });
-  const setLive = (patch: Partial<typeof c>) => live({ cursor: { ...c, ...patch } });
-  return (
-    <>
-      {inVideo ? (
-        <Section title="Cursor" hint="Found in your video, so it already shows your real pointer. Add a highlight or click effects around it.">
-          <p className="text-xs text-muted">Clicks are recognised when the cursor stops and the screen reacts next to it.</p>
-        </Section>
-      ) : (
-        <PointerSections c={c} set={set} setLive={setLive} liveStart={liveStart} liveEnd={liveEnd} cursorEvents={cursorEvents} />
-      )}
-      <Section title="Highlight">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Circle behind cursor</span>
-          <Toggle label="Cursor highlight" checked={c.highlight.enabled} onChange={(enabled) => set({ highlight: { ...c.highlight, enabled } })} />
-        </div>
-        <div className={cx(!c.highlight.enabled && "pointer-events-none opacity-50")}>
-          <ColorRow label="Highlight colour" value={c.highlight.color} onPick={(color) => set({ highlight: { ...c.highlight, color } })} />
-          <Slider label="Highlight size" value={c.highlight.size} min={1} max={4} step={0.1} format={(v) => `${v.toFixed(1)}×`} onChange={(size) => setLive({ highlight: { ...c.highlight, size } })} onStart={liveStart} onEnd={liveEnd} />
-          <Slider label="Highlight opacity" value={c.highlight.opacity} min={0.1} max={0.8} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(opacity) => setLive({ highlight: { ...c.highlight, opacity } })} onStart={liveStart} onEnd={liveEnd} />
-        </div>
-      </Section>
-      <Section title="Clicks">
-        <Chips
-          label="Click effect"
-          value={c.click.style}
-          options={[
-            ["ripple", "Ripple"],
-            ["none", "None"],
-          ]}
-          onPick={(style) => set({ click: { ...c.click, style } })}
-        />
-        <div className={cx("mt-3", c.click.style === "none" && "pointer-events-none opacity-50")}>
-          <ColorRow label="Click colour" value={c.click.color} onPick={(color) => set({ click: { ...c.click, color } })} />
-        </div>
-      </Section>
-      {!inVideo && (
-        <Section title="Sync" hint="Nudge the cursor if it looks slightly ahead of or behind the video.">
-        <Slider label="Cursor timing" value={c.offsetMs} min={-500} max={500} step={10} format={(v) => `${v > 0 ? "+" : ""}${v} ms`} onChange={(offsetMs) => setLive({ offsetMs })} onStart={liveStart} onEnd={liveEnd} />
-        </Section>
-      )}
-    </>
-  );
-}
-
-type CursorStyleT = EditProject["cursor"];
-function PointerSections({
-  c,
-  set,
-  setLive,
-  liveStart,
-  liveEnd,
-  cursorEvents,
-}: {
-  c: CursorStyleT;
-  set: (patch: Partial<CursorStyleT>) => void;
-  setLive: (patch: Partial<CursorStyleT>) => void;
-  liveStart: () => void;
-  liveEnd: () => void;
-  cursorEvents: number;
-}) {
-  return (
-    <>
-      <Section title="Cursor" hint={`${cursorEvents.toLocaleString()} cursor events recorded in the shared tab.`}>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Show cursor</span>
-          <Toggle label="Show cursor" checked={c.show} onChange={(show) => set({ show })} />
-        </div>
-        <Slider label="Cursor size" value={c.size} min={0.8} max={3} step={0.1} format={(v) => `${v.toFixed(1)}×`} onChange={(size) => setLive({ size })} onStart={liveStart} onEnd={liveEnd} />
-        <Slider label="Smoothing" value={c.smoothing} min={0} max={1} step={0.05} format={(v) => (v === 0 ? "Off" : `${Math.round(v * 100)}%`)} onChange={(smoothing) => setLive({ smoothing })} onStart={liveStart} onEnd={liveEnd} />
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Hide when still</span>
-          <Toggle label="Hide when still" checked={c.hideIdle} onChange={(hideIdle) => set({ hideIdle })} />
-        </div>
-      </Section>
-      <Section title="Style">
-        <p className="mb-1.5 text-xs font-medium text-muted">Cursor look</p>
-        <Chips label="Cursor look" value={c.theme} options={CURSOR_THEMES} onPick={(theme) => set({ theme })} />
-        <div className="mt-3">
-          <Slider label="Motion blur" value={c.motionBlur} min={0} max={1} step={0.05} format={(v) => (v === 0 ? "Off" : `${Math.round(v * 100)}%`)} onChange={(motionBlur) => setLive({ motionBlur })} onStart={liveStart} onEnd={liveEnd} />
-        </div>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Bounce on click</span>
-          <Toggle label="Bounce on click" checked={c.clickBounce} onChange={(clickBounce) => set({ clickBounce })} />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted">Sway while moving</span>
-          <Toggle label="Sway while moving" checked={c.sway} onChange={(sway) => set({ sway })} />
-        </div>
-      </Section>
-    </>
-  );
-}
-
-function ColorRow({ label, value, onPick }: { label: string; value: string; onPick: (c: string) => void }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <span className="text-xs font-medium text-muted">{label}</span>
-      <div role="radiogroup" aria-label={label} className="flex gap-1.5">
-        {CURSOR_COLORS.map((col) => (
-          <button
-            key={col}
-            type="button"
-            role="radio"
-            aria-checked={value === col}
-            aria-label={`${label} ${col}`}
-            onClick={() => onPick(col)}
-            className={cx("size-6 rounded-full border-2", value === col ? "border-ink" : "border-line")}
-            style={{ background: col }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const LEVEL_OPTIONS: [string, string][] = ZOOM_LEVELS.map((l) => [String(l), `${l}×`]);
-
 function ZoomPanel(p: PanelProps) {
   const z = p.project.zoom;
-  const hasTelemetry = p.zoomEvents > 0;
-  const estimated = p.zoomSource === "video-activity";
-  const fromCursor = p.zoomSource === "video-cursor";
   const selected = z.segments.find((s) => s.id === p.selectedZoomId) ?? null;
-  const regen = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true });
-  const regenLive = (patch: Partial<ZoomSettings>) => p.updateZoom(patch, { regenerate: true, transient: true });
-  const pct = Math.round((p.analysis?.progress ?? 0) * 100);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
   return (
     <>
-      <Section
-        title="Automatic zoom"
-        hint={
-          hasTelemetry
-            ? estimated
-              ? "Based on screen activity (estimated): this recording has no visible cursor, so zooms go where dialogs, menus and typing appear."
-              : fromCursor
-                ? "Based on your cursor: zooms in as you move to each click (fully in before you click), holds steady on that spot, and zooms out after."
-                : "Based on cursor data: zooms in around clicks (and pauses, if enabled) and holds steady on that spot."
-            : undefined
-        }
-      >
-        {p.analysis && !p.analysis.error ? (
-          <div data-testid="activity-analysis">
-            <p className="mb-2 text-xs text-muted">Finding your cursor and clicks… {pct}%</p>
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-line"
-              role="progressbar"
-              aria-label="Analysing recording"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={pct}
-            >
-              <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
-            </div>
-            <p className="mt-2 text-[11px] text-faint">Runs on this device only. You can keep editing meanwhile.</p>
-          </div>
-        ) : !hasTelemetry ? (
-          <p className="text-xs text-muted">
-            {p.analysis?.error ? `Couldn't analyse this recording (${p.analysis.error}).` : "No on-screen activity was found to zoom into."} You can
-            still add zooms by hand below.
-          </p>
-        ) : (
-          <>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Auto zoom</span>
-              <Toggle label="Auto zoom" checked={z.auto} onChange={(auto) => regen({ auto })} />
-            </div>
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Also zoom on pauses</span>
-              <Toggle label="Zoom on pauses" checked={z.onPauses} onChange={(onPauses) => regen({ onPauses })} disabled={!z.auto} />
-            </div>
-            <Slider
-              label="Hold after interaction"
-              value={z.holdMs}
-              min={500}
-              max={4000}
-              step={100}
-              format={(v) => `${(v / 1000).toFixed(1)} s`}
-              onChange={(holdMs) => regenLive({ holdMs })}
-              onStart={p.liveStart}
-              onEnd={p.liveEnd}
-            />
-            {estimated && (
-              <p className="mt-2 text-[11px] text-faint">For click-based zoom, record your entire screen or a window: browser tabs don&apos;t include the cursor.</p>
-            )}
-          </>
-        )}
-      </Section>
-
-      <Section title="Zoom style">
-        <p className="mb-1.5 text-xs font-medium text-muted">Zoom level</p>
-        <Chips label="Default zoom level" value={String(z.level)} options={LEVEL_OPTIONS} onPick={(v) => regen({ level: Number(v) })} />
-        <div className="mt-3">
-          <Slider
-            label="Transition"
-            value={z.transitionMs}
-            min={300}
-            max={1500}
-            step={50}
-            format={(v) => `${(v / 1000).toFixed(2)} s`}
-            onChange={(transitionMs) => regenLive({ transitionMs })}
-            onStart={p.liveStart}
-            onEnd={p.liveEnd}
-          />
-          {hasTelemetry && (
-            <Slider
-              label="Follow smoothness"
-              value={z.followSmoothing}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)}%`}
-              onChange={(followSmoothing) => p.updateZoom({ followSmoothing }, { transient: true })}
-              onStart={p.liveStart}
-              onEnd={p.liveEnd}
-            />
-          )}
-        </div>
-      </Section>
-
-      <Section title={`Zooms (${z.segments.length})`}>
+      <Section title="Zoom" hint="Zooms are added by you, at the playhead. Each one holds a steady view.">
         <Button size="sm" variant="secondary" onClick={p.addZoom}>
           <ZoomIn className="size-4" /> Add zoom at playhead
         </Button>
-        <p className="mt-1.5 text-[11px] text-faint">Shortcut: Z. Drag zooms on the timeline to move or resize them.</p>
-        {z.segments.length > 0 && (
-          <ol className="mt-3 space-y-1" data-testid="zoom-list">
-            {z.segments.map((s) => (
+        <p className="mt-1.5 text-[11px] text-faint">Shortcut: Z. Drag a zoom on the timeline to move it; drag its edges to change how long it lasts.</p>
+      </Section>
+
+      {selected && (
+        <Section title="Selected zoom" hint="Tip: click the preview to centre the zoom on that spot.">
+          <div data-testid="zoom-controls">
+            <Slider
+              label="Zoom amount"
+              value={selected.level}
+              min={ZOOM_MIN}
+              max={ZOOM_MAX}
+              step={0.05}
+              format={(v) => `${v.toFixed(2)}×`}
+              onChange={(level) => p.editZoom(selected.id, { level }, true)}
+              onStart={p.liveStart}
+              onEnd={p.liveEnd}
+            />
+            <Slider
+              label="Horizontal position"
+              value={selected.x}
+              min={0}
+              max={1}
+              step={0.005}
+              format={pct}
+              onChange={(x) => p.editZoom(selected.id, { x }, true)}
+              onStart={p.liveStart}
+              onEnd={p.liveEnd}
+            />
+            <Slider
+              label="Vertical position"
+              value={selected.y}
+              min={0}
+              max={1}
+              step={0.005}
+              format={pct}
+              onChange={(y) => p.editZoom(selected.id, { y }, true)}
+              onStart={p.liveStart}
+              onEnd={p.liveEnd}
+            />
+            <p className="mb-3 text-xs text-muted tabular-nums">
+              {formatDuration(selected.start)}–{formatDuration(selected.end)} of the recording
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => p.deleteZoom(selected.id)}>
+              Delete zoom
+            </Button>
+          </div>
+        </Section>
+      )}
+
+      <Section title="Zoom style">
+        <Slider
+          label="Default amount for new zooms"
+          value={z.level}
+          min={ZOOM_MIN}
+          max={ZOOM_MAX}
+          step={0.05}
+          format={(v) => `${v.toFixed(2)}×`}
+          onChange={(level) => p.updateZoom({ level }, { transient: true })}
+          onStart={p.liveStart}
+          onEnd={p.liveEnd}
+        />
+        <Slider
+          label="Transition"
+          value={z.transitionMs}
+          min={0}
+          max={1500}
+          step={50}
+          format={(v) => (v === 0 ? "Cut" : `${(v / 1000).toFixed(2)} s`)}
+          onChange={(transitionMs) => p.updateZoom({ transitionMs }, { transient: true })}
+          onStart={p.liveStart}
+          onEnd={p.liveEnd}
+        />
+      </Section>
+
+      <Section title={`Zooms (${z.segments.length})`}>
+        {z.segments.length === 0 ? (
+          <p className="text-xs text-muted">No zooms yet.</p>
+        ) : (
+          <ol className="space-y-1" data-testid="zoom-list">
+            {z.segments.map((s, i) => (
               <li key={s.id}>
                 <button
                   type="button"
@@ -773,12 +627,11 @@ function ZoomPanel(p: PanelProps) {
                     s.id === p.selectedZoomId ? "bg-primary-light text-primary-strong" : "hover:bg-subtle",
                   )}
                 >
-                  <span className="font-medium tabular-nums">
-                    {formatDuration(s.start)}–{formatDuration(s.end)}
+                  <span className="font-medium">
+                    Zoom {i + 1} · {s.level.toFixed(2)}×
                   </span>
-                  <span className="flex items-center gap-1.5 text-muted">
-                    {s.level}× · {s.mode === "follow" ? "follow" : "fixed"}
-                    {s.auto && <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-800">auto</span>}
+                  <span className="text-muted tabular-nums">
+                    {formatDuration(s.start)}–{formatDuration(s.end)}
                   </span>
                 </button>
               </li>
@@ -786,30 +639,111 @@ function ZoomPanel(p: PanelProps) {
           </ol>
         )}
       </Section>
-
-      {selected && (
-        <Section title="Selected zoom">
-          <p className="mb-1.5 text-xs font-medium text-muted">Level</p>
-          <Chips label="Zoom level" value={String(selected.level)} options={LEVEL_OPTIONS} onPick={(v) => p.editZoom(selected.id, { level: Number(v) })} />
-          <p className="mt-3 mb-1.5 text-xs font-medium text-muted">Focus</p>
-          <Chips
-            label="Zoom focus"
-            value={selected.mode}
-            options={hasTelemetry ? [["follow", "Follow cursor"], ["fixed", "Fixed point"]] : [["fixed", "Fixed point"]]}
-            onPick={(mode) => p.editZoom(selected.id, { mode })}
-          />
-          {selected.mode === "fixed" && (
-            <p className="mt-2 text-xs text-primary-strong">
-              Click the preview to choose where to zoom ({Math.round(selected.x * 100)}%, {Math.round(selected.y * 100)}%).
-            </p>
-          )}
-          {selected.auto && <p className="mt-2 text-[11px] text-faint">Editing an automatic zoom turns it into a manual one.</p>}
-          <Button size="sm" variant="ghost" className="mt-3" onClick={() => p.deleteZoom(selected.id)}>
-            Delete zoom
-          </Button>
-        </Section>
-      )}
     </>
+  );
+}
+
+function ScreenPanel({ project, update, live, liveStart, liveEnd, updateScreen }: PanelProps) {
+  const t = { ...DEFAULT_SCREEN, ...project.screen };
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const signedPct = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
+  return (
+    <>
+      <Section title="Screen" hint="Size, position, opacity, rotation and corners of the screen recording.">
+        <Slider label="Size" value={t.scale} min={0.3} max={1.5} step={0.01} format={pct} onChange={(scale) => updateScreen({ scale }, true)} onStart={liveStart} onEnd={liveEnd} />
+        <Slider label="Horizontal position" value={t.x} min={-0.5} max={0.5} step={0.005} format={signedPct} onChange={(x) => updateScreen({ x }, true)} onStart={liveStart} onEnd={liveEnd} />
+        <Slider label="Vertical position" value={t.y} min={-0.5} max={0.5} step={0.005} format={signedPct} onChange={(y) => updateScreen({ y }, true)} onStart={liveStart} onEnd={liveEnd} />
+        <Slider label="Opacity" value={t.opacity} min={0} max={1} step={0.01} format={pct} onChange={(opacity) => updateScreen({ opacity }, true)} onStart={liveStart} onEnd={liveEnd} />
+        <Slider label="Rotation" value={t.rotation} min={-180} max={180} step={1} format={(v) => `${v}°`} onChange={(rotation) => updateScreen({ rotation }, true)} onStart={liveStart} onEnd={liveEnd} />
+        <Slider
+          label="Corner curve"
+          value={project.radius}
+          min={0}
+          max={0.06}
+          step={0.002}
+          format={(v) => `${Math.round((v / 0.06) * 100)}%`}
+          onChange={(radius) => live({ radius })}
+          onStart={liveStart}
+          onEnd={liveEnd}
+        />
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted">Shadow</span>
+          <Toggle label="Screen shadow" checked={project.shadow} onChange={(shadow) => update({ shadow })} />
+        </div>
+        <Button size="sm" variant="ghost" className="mt-3" onClick={() => update({ screen: { ...DEFAULT_SCREEN } })}>
+          Reset screen
+        </Button>
+      </Section>
+    </>
+  );
+}
+
+const SCENE_KEYS: Record<SceneLayout, string> = { pip: "1", camera: "2", screen: "3" };
+
+function LayoutPanel({ project, hasCamera, switchScene, removeScene, sceneNow, onSeekSource }: PanelProps) {
+  if (!hasCamera) {
+    return (
+      <Section title="Layout">
+        <p className="text-sm text-muted">This recording has no webcam track, so there is only the screen. Turn on the webcam before recording to switch between screen and webcam here.</p>
+      </Section>
+    );
+  }
+  const cuts = project.scenes ?? [];
+  return (
+    <>
+      <Section title="Layout" hint="Switch what's on screen from the playhead onwards, like a multicam edit. Shortcuts: 1, 2, 3.">
+        <div className="grid gap-2" role="radiogroup" aria-label="Layout at the playhead">
+          {(["pip", "camera", "screen"] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              role="radio"
+              aria-checked={sceneNow === l}
+              onClick={() => switchScene(l)}
+              className={cx(
+                "flex items-center justify-between rounded-control border-2 px-3 py-2.5 text-left text-sm font-semibold",
+                sceneNow === l ? "border-primary bg-primary-surface text-primary-strong" : "border-line hover:bg-subtle",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <SceneIcon layout={l} /> {SCENE_LABEL[l]}
+              </span>
+              <kbd className="rounded border border-line bg-white px-1.5 text-[11px] font-medium text-muted">{SCENE_KEYS[l]}</kbd>
+            </button>
+          ))}
+        </div>
+      </Section>
+      <Section title={`Switches (${cuts.length})`}>
+        {cuts.length === 0 ? (
+          <p className="text-xs text-muted">The whole video shows {SCENE_LABEL.pip.toLowerCase()}. Move the playhead and pick a layout to switch.</p>
+        ) : (
+          <ol className="space-y-1" data-testid="scene-list">
+            {cuts.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-2 rounded-chip px-2.5 py-1.5 text-xs hover:bg-subtle">
+                <button type="button" className="flex-1 text-left" onClick={() => onSeekSource(c.at)}>
+                  <span className="font-medium">{SCENE_LABEL[c.layout]}</span>
+                  <span className="ml-2 text-muted tabular-nums">from {formatDuration(c.at)}</span>
+                </button>
+                <button type="button" onClick={() => removeScene(c.id)} aria-label={`Remove switch at ${formatDuration(c.at)}`} className="text-muted hover:text-ink">
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function SceneIcon({ layout }: { layout: SceneLayout }) {
+  return (
+    <svg viewBox="0 0 24 16" className="h-4 w-6" aria-hidden>
+      <rect x="0.5" y="0.5" width="23" height="15" rx="2" fill="none" stroke="currentColor" />
+      {layout !== "camera" && <rect x="3" y="3" width="18" height="10" rx="1" fill="currentColor" opacity="0.25" />}
+      {layout === "pip" && <circle cx="18" cy="11" r="3" fill="currentColor" />}
+      {layout === "camera" && <circle cx="12" cy="8" r="4.5" fill="currentColor" />}
+    </svg>
   );
 }
 
@@ -832,7 +766,7 @@ function WebcamPanel({ project, updateWebcam, liveStart, liveEnd, hasCamera }: P
   const w = project.webcam;
   return (
     <>
-      <Section title="Webcam" hint="Drag the webcam on the preview to place it anywhere; drag its corner to resize.">
+      <Section title="Webcam" hint="Its own shape, size, position, opacity, rotation and corners. You can also drag it on the preview.">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-xs font-medium text-muted">Show webcam</span>
           <Toggle label="Show webcam" checked={w.visible} onChange={(visible) => updateWebcam({ visible })} />
@@ -857,6 +791,8 @@ function WebcamPanel({ project, updateWebcam, liveStart, liveEnd, hasCamera }: P
               ))}
             </div>
           </div>
+          <Slider label="Horizontal position" value={w.x} min={0} max={1} step={0.005} format={(v) => `${Math.round(v * 100)}%`} onChange={(x) => updateWebcam({ x }, true)} onStart={liveStart} onEnd={liveEnd} />
+          <Slider label="Vertical position" value={w.y} min={0} max={1} step={0.005} format={(v) => `${Math.round(v * 100)}%`} onChange={(y) => updateWebcam({ y }, true)} onStart={liveStart} onEnd={liveEnd} />
           <Slider label="Webcam size" value={w.size} min={0.1} max={0.5} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(size) => updateWebcam({ size }, true)} onStart={liveStart} onEnd={liveEnd} />
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted">Shape</p>
@@ -883,21 +819,13 @@ function WebcamPanel({ project, updateWebcam, liveStart, liveEnd, hasCamera }: P
             <span className="text-xs font-medium text-muted">Mirror</span>
             <Toggle label="Mirror webcam" checked={w.mirror} onChange={(mirror) => updateWebcam({ mirror })} />
           </div>
+          <Slider label="Webcam opacity" value={w.opacity ?? 1} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(opacity) => updateWebcam({ opacity }, true)} onStart={liveStart} onEnd={liveEnd} />
+          <Slider label="Webcam rotation" value={w.rotation ?? 0} min={-180} max={180} step={1} format={(v) => `${v}°`} onChange={(rotation) => updateWebcam({ rotation }, true)} onStart={liveStart} onEnd={liveEnd} />
           <div className={cx(w.shape === "circle" && "pointer-events-none opacity-50")}>
-            <Slider label="Roundness" value={w.roundness} min={0} max={0.5} step={0.01} format={(v) => `${Math.round(v * 200)}%`} onChange={(roundness) => updateWebcam({ roundness }, true)} onStart={liveStart} onEnd={liveEnd} />
+            <Slider label="Corner curve" value={w.roundness} min={0} max={0.5} step={0.01} format={(v) => `${Math.round(v * 200)}%`} onChange={(roundness) => updateWebcam({ roundness }, true)} onStart={liveStart} onEnd={liveEnd} />
           </div>
           <Slider label="Edge margin" value={w.margin} min={0} max={0.12} step={0.005} format={(v) => `${Math.round(v * 1000) / 10}%`} onChange={(margin) => updateWebcam({ margin }, true)} onStart={liveStart} onEnd={liveEnd} />
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">Shrink while zoomed in</span>
-            <Toggle label="Shrink webcam while zoomed in" checked={w.shrinkOnZoom} onChange={(shrinkOnZoom) => updateWebcam({ shrinkOnZoom })} />
-          </div>
         </div>
-      </Section>
-      <Section title="Background">
-        <p className="text-xs text-muted">
-          Replacing or blurring the webcam background isn&apos;t available yet. It needs an on-device person-segmentation
-          model, which CaptureKit doesn&apos;t include yet (no cloud services are used).
-        </p>
       </Section>
     </>
   );

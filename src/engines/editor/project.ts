@@ -1,6 +1,5 @@
 import type { AudioTrack } from "./audio-tracks";
-import { DEFAULT_CURSOR_STYLE, type CursorStyle } from "../cursor/render";
-import { DEFAULT_ZOOM, type ZoomSettings } from "../zoom/types";
+import { DEFAULT_ZOOM, normalizeZoom, type ZoomSettings } from "../zoom/types";
 import type { Annotation } from "../annotations/types";
 import type { RecordingMeta } from "../shared/types";
 import { DEFAULT_WEBCAM, webcamFromLayout, type WebcamStyle } from "./webcam";
@@ -84,10 +83,12 @@ export interface EditProject {
   shadow: boolean;
   webcam: WebcamStyle;
   audio: { volume: number; muted: boolean };
-  /** Cursor effects (used when the recording has cursor telemetry). */
-  cursor: CursorStyle;
-  /** Smart zoom (segments + settings). */
+  /** Manual zooms (segments + settings). */
   zoom: ZoomSettings;
+  /** Screen layer: size, position, opacity, rotation (corner curve is `radius`). */
+  screen?: LayerTransform;
+  /** Multicam layout switches over time (source ms). Before the first switch: screen + webcam. */
+  scenes?: SceneCut[];
   /** Text, arrows, shapes, highlighter and blur, drawn over the screen. */
   annotations: Annotation[];
   /** 0..1 blur applied to the background (wallpaper, uploaded image or blurred video). */
@@ -97,6 +98,63 @@ export interface EditProject {
 }
 
 export const FULL_CROP: NormRect = { x: 0, y: 0, w: 1, h: 1 };
+
+/** Size, position, opacity and rotation of a layer. */
+export interface LayerTransform {
+  /** Size multiplier (0.3–1.5). */
+  scale: number;
+  /** Offset from the centred position, as a fraction of the output width / height (−0.5…0.5). */
+  x: number;
+  y: number;
+  /** 0..1 */
+  opacity: number;
+  /** Degrees (−180…180). */
+  rotation: number;
+}
+
+export const DEFAULT_SCREEN: LayerTransform = { scale: 1, x: 0, y: 0, opacity: 1, rotation: 0 };
+
+/** Multicam layouts: screen with the webcam on top, the webcam alone (full frame), or the screen alone. */
+export type SceneLayout = "pip" | "camera" | "screen";
+export const SCENE_LABEL: Record<SceneLayout, string> = { pip: "Screen + webcam", camera: "Full webcam", screen: "Screen only" };
+
+export interface SceneCut {
+  id: string;
+  /** Source time (ms) at which this layout starts. */
+  at: number;
+  layout: SceneLayout;
+}
+
+/** Layout at source time t. */
+export function sceneAt(scenes: readonly SceneCut[] | undefined, t: number): SceneLayout {
+  let layout: SceneLayout = "pip";
+  let at = -Infinity;
+  for (const c of scenes ?? []) {
+    if (c.at <= t && c.at >= at) {
+      layout = c.layout;
+      at = c.at;
+    }
+  }
+  return layout;
+}
+
+/** Sets the layout from source time `at` on (replacing a switch within 150 ms); removes switches that change nothing. */
+export function setSceneAt(scenes: readonly SceneCut[] | undefined, at: number, layout: SceneLayout, id: string): SceneCut[] {
+  const list = (scenes ?? []).filter((c) => Math.abs(c.at - at) > 150);
+  list.push({ id, at: Math.max(0, Math.round(at)), layout });
+  list.sort((a, b) => a.at - b.at);
+  const out: SceneCut[] = [];
+  let prev: SceneLayout = "pip";
+  for (const c of list) {
+    if (c.layout === prev) continue;
+    out.push(c);
+    prev = c.layout;
+  }
+  return out;
+}
+
+/** True when any part of the edit shows the full webcam. */
+export const usesCameraScene = (p: Pick<EditProject, "scenes">) => (p.scenes ?? []).some((c) => c.layout === "camera");
 
 export function createProject(meta: RecordingMeta, sourceDurationMs = meta.durationMs): EditProject {
   return {
@@ -114,8 +172,8 @@ export function createProject(meta: RecordingMeta, sourceDurationMs = meta.durat
     shadow: false,
     webcam: meta.camera ? webcamFromLayout(meta.camera.layout, true) : { ...DEFAULT_WEBCAM, visible: false },
     audio: { volume: 1, muted: false },
-    cursor: structuredClone(DEFAULT_CURSOR_STYLE),
     zoom: structuredClone(DEFAULT_ZOOM),
+    screen: { ...DEFAULT_SCREEN },
     annotations: [],
   };
 }
@@ -135,20 +193,16 @@ export function clampCrop(r: NormRect, min = 0.05): NormRect {
 
 /** Fills in fields added after a project was saved (older versions). */
 export function normalizeProject(p: EditProject): EditProject {
-  const c = (p as Partial<EditProject>).cursor;
   const z = (p as Partial<EditProject>).zoom;
   // v0.2–v0.5 stored { visible, layout: corner + S/M/L }.
   const w = p.webcam as Partial<WebcamStyle> & { layout?: Parameters<typeof webcamFromLayout>[0] };
   const webcam: WebcamStyle = w.layout && w.x === undefined ? webcamFromLayout(w.layout, w.visible ?? true) : { ...DEFAULT_WEBCAM, ...w };
+  const { cursor: _legacyCursor, ...rest } = p as EditProject & { cursor?: unknown };
+  void _legacyCursor;
   return {
-    ...p,
-    cursor: {
-      ...DEFAULT_CURSOR_STYLE,
-      ...c,
-      highlight: { ...DEFAULT_CURSOR_STYLE.highlight, ...c?.highlight },
-      click: { ...DEFAULT_CURSOR_STYLE.click, ...c?.click },
-    },
-    zoom: { ...DEFAULT_ZOOM, ...z, segments: z?.segments ?? [], dismissed: z?.dismissed ?? [] },
+    ...rest,
+    zoom: normalizeZoom(z),
+    screen: { ...DEFAULT_SCREEN, ...p.screen },
     webcam,
     annotations: (p as Partial<EditProject>).annotations ?? [],
   };

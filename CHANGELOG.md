@@ -2,6 +2,25 @@
 
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] — 2026-11-26 — Simple recorder, manual editing, multicam layout
+
+### Removed
+- **Automatic zoom** (video analysis, cursor detection, click inference) and the "Zoom in here" button / Alt+Shift+Z.
+- **Cursor features**: cursor tracking, the browser extension, cursor effects and the Cursor panel. Old automatic
+  zooms are removed from existing projects when they are opened; manual zooms are kept.
+
+### Added
+- **Manual zoom with sliders**: zoom amount (1–4×), horizontal and vertical position, or click the preview to centre
+  it. Each zoom holds a steady view; transition length (or a hard cut) is adjustable.
+- **Screen layer** panel: size, position, opacity, rotation and corner curve.
+- **Webcam** gets position, opacity and rotation sliders next to its own shape, size, corner curve, border, shadow
+  and mirror.
+- **Multicam layout**: switch between screen + webcam, full webcam and screen only at the playhead (Layout panel or
+  keys 1–3). A Layout lane on the timeline shows each part; preview and all exports follow it.
+
+### Changed
+- After recording, the editor opens without any automatic changes besides the default framing.
+
 ## [0.11.1] — 2026-11-25 — Steady zooms
 
 ### Changed

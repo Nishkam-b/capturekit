@@ -11,7 +11,6 @@ Read `PROJECT_PLAN.md` (status) and `ARCHITECTURE.md` (design) before changing c
 - `npm run lint` / `npm run typecheck`
 - `npm run test:unit` — pure logic tests
 - `npm run test:e2e` — real Chrome + Edge with fake camera/mic and auto-selected screen source (headed; build first)
-- `npm run test:extension` — cursor tracking with the real unpacked extension (Edge; branded Chrome ignores `--load-extension`)
 - `npm run test:firefox` — opt-in Firefox smoke test
 - Before running e2e, stop any server on port 3100: Playwright reuses it, and a stale build there causes confusing failures
 

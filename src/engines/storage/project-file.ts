@@ -1,4 +1,3 @@
-import type { CursorTrack } from "../cursor/types";
 import type { EditProject } from "../editor/project";
 import type { RecordingMeta } from "../shared/types";
 
@@ -15,14 +14,16 @@ export interface ProjectFileHeader {
   format: 1;
   meta: RecordingMeta;
   project: EditProject | null;
-  cursor: CursorTrack | null;
+  /** Unused since v0.12 (kept in the format; always null). */
+  cursor?: null;
   media: Array<{ kind: string; type: string; size: number }>;
 }
 
 export interface ProjectFileContents {
   meta: RecordingMeta;
   project: EditProject | null;
-  cursor: CursorTrack | null;
+  /** Unused since v0.12 (kept in the format; always null). */
+  cursor?: null;
   media: Record<string, Blob>;
 }
 
@@ -32,7 +33,7 @@ export function packProjectFile(c: ProjectFileContents): Blob {
     format: 1,
     meta: c.meta,
     project: c.project,
-    cursor: c.cursor,
+    cursor: null,
     media: entries.map(([kind, b]) => ({ kind, type: b.type, size: b.size })),
   };
   const json = new TextEncoder().encode(JSON.stringify(header));
@@ -64,5 +65,5 @@ export async function unpackProjectFile(file: Blob): Promise<ProjectFileContents
     offset = end;
   }
   if (!media.screen) throw new Error("The project file has no video in it.");
-  return { meta: header.meta, project: header.project, cursor: header.cursor, media };
+  return { meta: header.meta, project: header.project, cursor: null, media };
 }

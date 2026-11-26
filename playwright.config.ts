@@ -36,12 +36,6 @@ export default defineConfig({
       },
     },
     {
-      // Cursor tracking with the real unpacked extension (launches its own Edge profile).
-      name: "e2e-extension",
-      testDir: "tests/extension",
-      workers: 1,
-    },
-    {
       // Smoke test only. Needs `npx playwright install firefox`. Safari can't be automated on Windows.
       name: "e2e-firefox",
       testDir: "tests/firefox",

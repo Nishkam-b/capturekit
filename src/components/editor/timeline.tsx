@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Camera, Minus, MousePointer2, Plus, Scissors, Shapes, Trash2, Volume2, ZoomIn } from "lucide-react";
+import { Columns2, Minus, Plus, Scissors, Shapes, Trash2, Volume2, ZoomIn } from "lucide-react";
 import type { FilmFrame, Waveform } from "@/engines/editor/analysis";
-import type { Clip } from "@/engines/editor/project";
+import { SCENE_LABEL, type Clip, type SceneCut, type SceneLayout } from "@/engines/editor/project";
 import { clipDuration, clipOffsets, clipSpeed, sourceToOutputClamped, totalDuration } from "@/engines/editor/timeline";
 import type { ZoomSegment } from "@/engines/zoom/types";
 import { formatDuration } from "@/engines/shared/format";
@@ -17,7 +17,6 @@ interface Props {
   waveform: Waveform | null | "loading";
   hasAudio: boolean;
   hasCamera: boolean;
-  webcamVisible: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onSeek: (outMs: number) => void;
@@ -28,7 +27,9 @@ interface Props {
   onDelete: () => void;
   canDelete: boolean;
   /** Output times of recorded clicks; null when the recording has no cursor data. */
-  clickTimes: number[] | null;
+  /** Multicam layout switches (null = no webcam in this recording). */
+  scenes: SceneCut[] | null;
+  onSelectScenes: () => void;
   zoom: { segments: ZoomSegment[]; transitionMs: number; sourceDurationMs: number };
   selectedZoomId: string | null;
   onSelectZoom: (id: string) => void;
@@ -251,10 +252,10 @@ export function Timeline(p: Props) {
                   key={s.id}
                   data-testid={`zoom-${i}`}
                   onPointerDown={(e) => zoomDown(s, "move", e)}
-                  title={`${s.level}× zoom${s.auto ? " (auto)" : ""}`}
+                  title={`${s.level.toFixed(2)}× zoom`}
                   className={cx(
                     "group absolute inset-y-1 cursor-grab overflow-hidden rounded-md border-2 active:cursor-grabbing",
-                    s.auto ? "bg-violet-200" : "bg-indigo-300",
+                    "bg-indigo-300",
                     selected ? "border-indigo-600" : "border-transparent hover:border-indigo-400",
                   )}
                   style={{ left: a * pxPerMs + 1, width: Math.max(8, (b - a + tail) * pxPerMs - 2) }}
@@ -263,7 +264,7 @@ export function Timeline(p: Props) {
                   <span className="pointer-events-none absolute inset-y-0 left-0 bg-gradient-to-r from-white/70 to-transparent" style={{ width: ramp * pxPerMs }} />
                   <span className="pointer-events-none absolute inset-y-0 right-0 bg-gradient-to-l from-white/70 to-transparent" style={{ width: tail * pxPerMs }} />
                   <span className="pointer-events-none relative flex h-full items-center gap-1 px-2 text-[10px] font-semibold text-indigo-900">
-                    {s.level}×{s.auto && <span className="font-normal text-indigo-700">auto</span>}
+                    {s.level.toFixed(2).replace(/.?0+$/, "")}×
                   </span>
                   <div
                     role="slider"
@@ -329,33 +330,24 @@ export function Timeline(p: Props) {
             </Track>
           )}
 
-          {p.clickTimes && (
-            <Track label="Cursor" icon={<MousePointer2 className="size-3.5" />} short>
-              <div className="absolute inset-y-1 rounded-md bg-amber-50" style={{ left: 1, width: Math.max(2, width - 2) }} data-testid="cursor-lane">
-                {p.clickTimes.length === 0 && (
-                  <span className="flex h-full items-center px-2 text-[10px] text-amber-700/70">Cursor movement, no clicks</span>
-                )}
-                {p.clickTimes.map((t, i) => (
-                  <span
-                    key={i}
-                    data-testid="click-marker"
-                    title={`Click at ${formatDuration(t)}`}
-                    className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-white"
-                    style={{ left: t * pxPerMs }}
-                  />
-                ))}
-              </div>
-            </Track>
-          )}
-
-          {p.hasCamera && (
-            <Track label="Webcam" icon={<Camera className="size-3.5" />} short>
-              <div
-                className={cx("absolute inset-y-1 rounded-md", p.webcamVisible ? "bg-sky-100" : "bg-slate-100")}
-                style={{ left: 1, width: Math.max(2, width - 2) }}
-              >
-                <span className="flex h-full items-center px-2 text-[10px] text-slate-500">{p.webcamVisible ? "Webcam overlay" : "Webcam hidden"}</span>
-              </div>
+          {p.scenes && (
+            <Track label="Layout" icon={<Columns2 className="size-3.5" />} short>
+              {sceneBlocks(p.scenes, p.clips, total).map((blk) => (
+                <button
+                  key={blk.key}
+                  type="button"
+                  data-testid={`scene-${blk.layout}`}
+                  title={`${SCENE_LABEL[blk.layout]} from ${formatDuration(blk.from)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    p.onSelectScenes();
+                  }}
+                  className={cx("absolute inset-y-1 overflow-hidden rounded-md border border-white text-left", SCENE_COLOR[blk.layout])}
+                  style={{ left: blk.from * pxPerMs + 1, width: Math.max(4, (blk.to - blk.from) * pxPerMs - 2) }}
+                >
+                  <span className="flex h-full items-center truncate px-2 text-[10px] font-semibold">{SCENE_LABEL[blk.layout]}</span>
+                </button>
+              ))}
             </Track>
           )}
 
@@ -512,4 +504,23 @@ function WaveCanvas({ waveform, clip, width }: { waveform: Waveform; clip: Clip;
 function formatTick(ms: number, step: number): string {
   if (step < 1000) return `${(ms / 1000).toFixed(step < 500 ? 2 : 1)}s`;
   return formatDuration(ms);
+}
+
+const SCENE_COLOR: Record<SceneLayout, string> = {
+  pip: "bg-sky-100 text-sky-800",
+  camera: "bg-amber-100 text-amber-800",
+  screen: "bg-slate-100 text-slate-600",
+};
+
+/** Layout blocks on the output timeline. */
+function sceneBlocks(scenes: readonly SceneCut[], clips: readonly Clip[], total: number) {
+  const cuts = [...scenes].sort((a, b) => a.at - b.at);
+  const points = [{ at: 0, layout: "pip" as SceneLayout, key: "start" }, ...cuts.map((c) => ({ at: sourceToOutputClamped(clips, c.at), layout: c.layout, key: c.id }))];
+  const out: Array<{ key: string; layout: SceneLayout; from: number; to: number }> = [];
+  for (let i = 0; i < points.length; i++) {
+    const from = points[i].at;
+    const to = i + 1 < points.length ? points[i + 1].at : total;
+    if (to > from) out.push({ key: points[i].key, layout: points[i].layout, from, to });
+  }
+  return out;
 }

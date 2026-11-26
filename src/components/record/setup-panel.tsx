@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { AppWindow, Camera, Globe, Info, LoaderCircle, Mic, Monitor, MousePointer2, Timer, Volume2 } from "lucide-react";
+import { AppWindow, Camera, Globe, Info, LoaderCircle, Mic, Monitor, Timer, Volume2 } from "lucide-react";
 import { createLevelMeter, type DeviceLists, type RecorderCapabilities } from "@/engines/recorder";
 import type { DisplaySurfaceHint, WebcamPosition, WebcamShape, WebcamSize } from "@/engines/shared/types";
 import { MediaFrame, WebcamBubble } from "../media-frame";
-import { Badge, Button, Card, Notice, Select, Toggle, cx } from "../ui";
+import { Button, Card, Notice, Select, Toggle, cx } from "../ui";
 import { SETUP_BLOCK_MINUTES, SETUP_WARN_MINUTES } from "@/lib/storage-budget";
 import type { SetupPrefs } from "./prefs";
 
@@ -31,8 +31,6 @@ export interface SetupPanelProps {
   onStart: () => void;
   /** Estimated minutes of recording that fit in free browser storage. */
   space: { minutes: number } | null;
-  /** Cursor extension version; undefined = checking, null = not installed. */
-  cursorExtension: string | null | undefined;
 }
 
 export function SetupPanel(p: SetupPanelProps) {
@@ -141,23 +139,6 @@ export function SetupPanel(p: SetupPanelProps) {
                   onChange={(systemAudio) => update({ systemAudio })}
                   disabled={!systemAudioAvailable}
                 />
-              }
-            />
-
-            <OptionRow
-              icon={<MousePointer2 className="size-5" />}
-              title="Automatic zoom"
-              text={cursorText(prefs.surface, p.cursorExtension)}
-              control={
-                <span data-testid="cursor-extension-status">
-                  {prefs.surface === "browser" && p.cursorExtension ? (
-                    <Badge tone="green">Extension connected</Badge>
-                  ) : prefs.surface === "browser" ? (
-                    <Badge>Activity-based</Badge>
-                  ) : (
-                    <Badge tone="green">Follows clicks</Badge>
-                  )}
-                </span>
               }
             />
 
@@ -345,12 +326,4 @@ function MicMeter({ stream }: { stream: MediaStream }) {
 function formatMinutes(min: number): string {
   if (min >= 120) return `${Math.floor(min / 60)} hours`;
   return `${Math.floor(min)} minutes`;
-}
-
-function cursorText(surface: DisplaySurfaceHint, ext: string | null | undefined): string {
-  if (surface !== "browser") {
-    return "Your cursor is part of the video. After recording, CaptureKit finds it and zooms in on each click (Alt+Shift+Z adds a zoom by hand).";
-  }
-  if (ext) return "Cursor moves and clicks in the shared tab are recorded for cursor effects and click-based zoom.";
-  return "Browser tabs are recorded without the mouse pointer, so zooms follow on-screen changes. Choose Entire screen or Window for click-based zoom.";
 }

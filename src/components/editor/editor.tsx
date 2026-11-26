@@ -1,30 +1,25 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect -- loading from IndexedDB and media analysis */
+/* eslint-disable react-hooks/set-state-in-effect -- loading from IndexedDB */
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, FileDown, Keyboard, LoaderCircle, Pause, Play, Redo2, Sparkles, Undo2, Upload, X } from "lucide-react";
+import { ArrowLeft, FileDown, Keyboard, LoaderCircle, Pause, Play, Redo2, Undo2, Upload } from "lucide-react";
 import { exportProjectFile } from "@/lib/import";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { computeWaveform, generateFilmstrip, type FilmFrame, type Waveform } from "@/engines/editor/analysis";
 import type { PreviewPlayer, PlayerSnapshot } from "@/engines/editor/player";
-import { buildCursorPath, pressedRanges, type CursorBundle } from "@/engines/cursor/path";
-import { withAutoSegments } from "@/engines/zoom/detect";
-import { markerSegments, placeMarkers, pointerAt } from "@/engines/zoom/markers";
 import { setAnnotationFont } from "@/engines/annotations/render";
 import { KIND_LABEL, createAnnotation, type Annotation, type AnnotationKind } from "@/engines/annotations/types";
 import type { WebcamStyle } from "@/engines/editor/webcam";
-import { DEFAULT_ZOOM, type ZoomSegment, type ZoomSettings } from "@/engines/zoom/types";
-import { isPointerSource, packEvents, unpackEvents, type CursorEvent, type TelemetrySource } from "@/engines/cursor/types";
-import { analyzeRecording } from "@/engines/zoom/sampler";
-import { BG_IMAGE, createProject, normalizeProject, type EditProject, type NormRect } from "@/engines/editor/project";
-import { locate, removeClip, sourceToOutput, splitAt, totalDuration, trimClip } from "@/engines/editor/timeline";
+import type { ZoomSegment, ZoomSettings } from "@/engines/zoom/types";
+import { BG_IMAGE, createProject, normalizeProject, sceneAt, setSceneAt, type EditProject, type LayerTransform, type NormRect, type SceneLayout } from "@/engines/editor/project";
+import { locate, removeClip, sourceToOutputClamped, splitAt, totalDuration, trimClip } from "@/engines/editor/timeline";
 import { createId, formatDuration } from "@/engines/shared/format";
 import type { AudioTrack } from "@/engines/editor/audio-tracks";
 import type { RecordingMeta } from "@/engines/shared/types";
-import { getCursorTrack, getMedia, getProject, getRecording, saveCursorTrack, saveMedia, saveProject } from "@/engines/storage/db";
+import { getMedia, getProject, getRecording, saveMedia, saveProject } from "@/engines/storage/db";
 import { Logo } from "../app-shell";
 import { Button, Notice, cx } from "../ui";
 import { ExportDialog } from "./export-dialog";
@@ -38,15 +33,11 @@ interface Loaded {
   screen: Blob;
   camera: Blob | null;
   project: EditProject;
-  /** Stored telemetry: precise (extension) or estimated from on-screen activity (video). */
-  cursorEvents: CursorEvent[];
-  telemetrySource: TelemetrySource | null;
 }
 
 export function Editor() {
   const params = useSearchParams();
   const id = params.get("id");
-  const fresh = params.get("new") === "1";
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,25 +50,13 @@ export function Editor() {
     (async () => {
       const meta = await getRecording(id);
       if (!meta) throw new Error("Recording not found. It may have been deleted.");
-      // eslint-disable-next-line prefer-const -- reassigned below
-      let [screen, camera, saved, cursorTrack] = await Promise.all([
+      const [screen, camera, saved] = await Promise.all([
         getMedia(id, "screen"),
         meta.camera ? getMedia(id, "camera") : Promise.resolve(null),
         getProject(id),
-        getCursorTrack(id).catch(() => null),
       ]);
       if (!screen) throw new Error("This recording's video data is missing.");
-      // Tracks from the older activity-only analysis are redone with cursor detection.
-      if (cursorTrack?.source === "video") cursorTrack = null;
-      if (!cancelled)
-        setLoaded({
-          meta,
-          screen,
-          camera,
-          project: saved ? refreshAutoZooms(normalizeProject(saved), cursorTrack ? unpackEvents(cursorTrack.events) : []) : initialProject(meta, cursorTrack ? unpackEvents(cursorTrack.events) : []),
-          cursorEvents: cursorTrack ? unpackEvents(cursorTrack.events) : [],
-          telemetrySource: cursorTrack?.source ?? null,
-        });
+      if (!cancelled) setLoaded({ meta, screen, camera, project: saved ? normalizeProject(saved) : initialProject(meta) });
     })().catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : "Couldn't open the editor."));
     return () => {
       cancelled = true;
@@ -97,38 +76,17 @@ export function Editor() {
     );
   }
   if (!loaded) return <div className="p-10 text-sm text-muted">Opening editor…</div>;
-  return <Workspace {...loaded} fresh={fresh} />;
+  return <Workspace {...loaded} />;
 }
 
 const IDLE: PlayerSnapshot = { timeMs: 0, playing: false, durationMs: 0 };
 const noopSubscribe = () => () => undefined;
 
-function Workspace({ meta, screen, camera, project: initial, cursorEvents: storedEvents, telemetrySource, fresh = false }: Loaded & { fresh?: boolean }) {
-  const [showReady, setShowReady] = useState(fresh);
+function Workspace({ meta, screen, camera, project: initial }: Loaded) {
   const history = useHistory<EditProject>(initial);
   const project = history.value;
-  const smoothing = project.cursor.smoothing;
-  const followSmoothing = project.zoom.followSmoothing;
 
-  // Events that drive zoom: precise cursor data, or activity estimated from the video.
-  const [zoomEvents, setZoomEvents] = useState<CursorEvent[]>(storedEvents);
-  const [zoomSource, setZoomSource] = useState<TelemetrySource | null>(telemetrySource);
-  const [analysis, setAnalysis] = useState<{ progress: number; error?: string } | null>(null);
-  /** Pointer data (extension, or the cursor found in the video) drives cursor effects; screen activity doesn't. */
-  const cursorEvents = useMemo(() => (isPointerSource(zoomSource) ? zoomEvents : []), [zoomEvents, zoomSource]);
-
-  const cursor = useMemo<CursorBundle | null>(() => {
-    const path = cursorEvents.length ? buildCursorPath(cursorEvents, smoothing) : null;
-    // The zoom camera follows a much calmer version of the path.
-    const follow = buildCursorPath(zoomEvents, 0.75 + 0.24 * followSmoothing);
-    return follow ? { path, pressed: pressedRanges(cursorEvents), follow } : null;
-  }, [cursorEvents, zoomEvents, smoothing, followSmoothing]);
   const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
-  const clickTimes = useMemo(
-    () => cursorEvents.filter((e) => e.kind === 1).map((e) => sourceToOutput(project.clips, e.t)).filter((t): t is number => t !== null),
-    [cursorEvents, project.clips],
-  );
-
   // Uploaded background image: stored with the recording, decoded once for drawing.
   const [bgImage, setBgImage] = useState<{ url: string; bitmap: ImageBitmap } | null>(null);
   const showBackground = useCallback(async (blob: Blob) => {
@@ -175,40 +133,6 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
     [meta.id, showBackground, history],
   );
 
-  // No cursor data: estimate activity from the video once, then auto-zoom from it.
-  useEffect(() => {
-    if (telemetrySource) return;
-    const ctrl = new AbortController();
-    setAnalysis({ progress: 0 });
-    analyzeRecording(screen, initial.sourceDurationMs, { signal: ctrl.signal, onProgress: (progress) => setAnalysis({ progress }) })
-      .then(async ({ events, method }) => {
-        const source: TelemetrySource = method === "cursor" ? "video-cursor" : "video-activity";
-        await saveCursorTrack({ recordingId: meta.id, source, surface: "monitor", events: packEvents(events) }).catch(() => undefined);
-        setZoomEvents(events);
-        setZoomSource(source);
-        setAnalysis(null);
-        // Fill in automatic zooms (not an undo step: it's the starting point, not a user edit).
-        // The cursor is already in the video, so effects draw around it instead of drawing a second arrow.
-        history.set(
-          (p) => ({
-            ...p,
-            cursor: method === "cursor" ? { ...p.cursor, show: false } : p.cursor,
-            zoom: (() => {
-              const z = method === "cursor" ? { ...p.zoom, segments: placeMarkers(p.zoom.segments, events) } : p.zoom;
-              return z.auto && events.length ? withAutoSegments(z, events, p.sourceDurationMs) : z;
-            })(),
-          }),
-          { transient: true },
-        );
-      })
-      .catch((e: unknown) => {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        setAnalysis({ progress: 0, error: e instanceof Error ? e.message : "Couldn't analyse the recording." });
-      });
-    return () => ctrl.abort();
-    // Runs once per opened recording.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [tool, setTool] = useState<Tool>("trim");
   const [player, setPlayer] = useState<PreviewPlayer | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(initial.clips[0]?.id ?? null);
@@ -340,20 +264,12 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
     [history, project],
   );
 
-  // ---- smart zoom
-  /** Changes zoom settings; auto zooms are regenerated when auto-zoom settings change. */
+  // ---- manual zoom
   const updateZoom = useCallback(
-    (patch: Partial<ZoomSettings>, opts?: { transient?: boolean; regenerate?: boolean }) => {
-      history.set(
-        (p) => {
-          let zoom = { ...p.zoom, ...patch };
-          if (opts?.regenerate) zoom = withAutoSegments(zoom, zoomEvents, p.sourceDurationMs);
-          return { ...p, zoom };
-        },
-        { transient: opts?.transient },
-      );
+    (patch: Partial<ZoomSettings>, opts?: { transient?: boolean }) => {
+      history.set((p) => ({ ...p, zoom: { ...p.zoom, ...patch } }), { transient: opts?.transient });
     },
-    [history, zoomEvents],
+    [history],
   );
 
   const addZoom = useCallback(() => {
@@ -364,18 +280,15 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
       start: Math.round(at),
       end: Math.round(Math.min(project.sourceDurationMs, at + 2500)),
       level: project.zoom.level,
-      // A steady view on where the cursor is (or the centre); choose "Follow cursor" in the Zoom panel to track it instead.
-      mode: "fixed",
-      x: pointerAt(cursorEvents, at)?.x ?? 0.5,
-      y: pointerAt(cursorEvents, at)?.y ?? 0.5,
-      auto: false,
+      x: 0.5,
+      y: 0.5,
     };
     updateZoom({ segments: [...project.zoom.segments, seg].sort((a, b) => a.start - b.start) });
     setSelectedZoomId(id);
     setTool("zoom");
-  }, [project.clips, project.sourceDurationMs, project.zoom, snap.timeMs, cursorEvents, updateZoom]);
+  }, [project.clips, project.sourceDurationMs, project.zoom, snap.timeMs, updateZoom]);
 
-  /** Edits a segment. Editing an auto zoom makes it manual, so regenerating never overwrites it. */
+  /** Edits a zoom (level, position, timing). */
   const editZoom = useCallback(
     (id: string, patch: Partial<ZoomSegment>, transient = false) => {
       history.set(
@@ -383,7 +296,7 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           ...p,
           zoom: {
             ...p.zoom,
-            segments: p.zoom.segments.map((s) => (s.id === id ? { ...s, ...patch, auto: false } : s)).sort((a, b) => a.start - b.start),
+            segments: p.zoom.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)).sort((a, b) => a.start - b.start),
           },
         }),
         { transient },
@@ -394,22 +307,32 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
 
   const deleteZoom = useCallback(
     (id: string) => {
-      const seg = project.zoom.segments.find((s) => s.id === id);
-      if (!seg) return;
-      updateZoom({
-        segments: project.zoom.segments.filter((s) => s.id !== id),
-        dismissed: seg.auto && seg.key ? [...project.zoom.dismissed, seg.key] : project.zoom.dismissed,
-      });
+      updateZoom({ segments: project.zoom.segments.filter((s) => s.id !== id) });
       setSelectedZoomId(null);
     },
     [project.zoom, updateZoom],
   );
 
-  // ---- webcam & annotations
+  // ---- layers: webcam and screen
   const updateWebcam = useCallback(
     (patch: Partial<WebcamStyle>, transient = false) => history.set((p) => ({ ...p, webcam: { ...p.webcam, ...patch } }), { transient }),
     [history],
   );
+  const updateScreen = useCallback(
+    (patch: Partial<LayerTransform>, transient = false) =>
+      history.set((p) => ({ ...p, screen: { scale: 1, x: 0, y: 0, opacity: 1, rotation: 0, ...p.screen, ...patch } }), { transient }),
+    [history],
+  );
+
+  // ---- multicam layout: switch at the playhead
+  const switchScene = useCallback(
+    (layout: SceneLayout) => {
+      const at = locate(project.clips, snap.timeMs).sourceMs;
+      history.set((p) => ({ ...p, scenes: setSceneAt(p.scenes, at, layout, createId()) }));
+    },
+    [history, project.clips, snap.timeMs],
+  );
+  const removeScene = useCallback((id: string) => history.set((p) => ({ ...p, scenes: (p.scenes ?? []).filter((c) => c.id !== id) })), [history]);
 
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const addAnnotation = useCallback(
@@ -558,7 +481,7 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
   }, []);
 
   const selectedZoom = project.zoom.segments.find((s) => s.id === selectedZoomId) ?? null;
-  const pickFocus = tool === "zoom" && selectedZoom?.mode === "fixed";
+  const pickFocus = tool === "zoom" && !!selectedZoom;
 
   // Keep selection valid after undo/redo.
   useEffect(() => {
@@ -583,6 +506,8 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
       } else if (e.key === " " && !target.closest("button")) {
         e.preventDefault();
         player?.toggle();
+      } else if (!mod && camera && (e.key === "1" || e.key === "2" || e.key === "3")) {
+        switchScene(e.key === "1" ? "pip" : e.key === "2" ? "camera" : "screen");
       } else if (e.key.toLowerCase() === "z" && !mod) {
         addZoom();
       } else if (e.key.toLowerCase() === "s" && !mod) {
@@ -598,7 +523,7 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [exporting, history, player, split, del, snap.timeMs, addZoom, deleteZoom, tool, selectedZoomId, selectedAnnotationId, deleteAnnotation]);
+  }, [exporting, history, player, split, del, snap.timeMs, addZoom, deleteZoom, tool, selectedZoomId, selectedAnnotationId, deleteAnnotation, camera, switchScene]);
 
   const total = totalDuration(project.clips);
   const srcSize = player?.sourceSize ?? { w: meta.screen.width, h: meta.screen.height };
@@ -652,21 +577,6 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           </Button>
         </div>
       </header>
-      {showReady && (
-        <ReadyBanner
-          analysing={!!analysis && !analysis.error}
-          progress={analysis?.progress ?? 1}
-          zooms={project.zoom.segments.length}
-          clickBased={zoomSource === "video-cursor" || zoomSource === "extension"}
-          canExport={!!player}
-          onExport={() => {
-            player?.pause();
-            setExporting(true);
-          }}
-          onClose={() => setShowReady(false)}
-        />
-      )}
-
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <ToolList tool={tool} onTool={setTool} />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -678,7 +588,6 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
             onPlayer={setPlayer}
             onCrop={onCrop}
             onCropCommit={onCropCommit}
-            cursor={cursor}
             backgroundImage={bgImage?.bitmap ?? null}
             overlayImages={overlays}
             audioUrls={audioUrls}
@@ -732,14 +641,15 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           onDelete={del}
           hasCamera={!!camera}
           hasAudio={hasAudio}
-          cursorEvents={cursorEvents.length}
-          zoomEvents={zoomEvents.length}
           backgroundImageUrl={bgImage?.url ?? null}
           onBackgroundImage={onBackgroundImage}
-          zoomSource={zoomSource}
-          analysis={analysis}
           updateZoom={updateZoom}
           updateWebcam={updateWebcam}
+          updateScreen={updateScreen}
+          switchScene={switchScene}
+          removeScene={removeScene}
+          sceneNow={sceneAt(project.scenes, selectedLoc?.sourceMs ?? 0)}
+          onSeekSource={(ms) => seek(sourceToOutputClamped(project.clips, ms))}
           addAnnotation={addAnnotation}
           editAnnotation={editAnnotation}
           deleteAnnotation={deleteAnnotation}
@@ -756,13 +666,13 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           onSelectZoom={(zid) => {
             setSelectedZoomId(zid);
             const s = project.zoom.segments.find((x) => x.id === zid);
-            const out = s ? sourceToOutput(project.clips, s.start + project.zoom.transitionMs) : null;
+            const out = s ? sourceToOutputClamped(project.clips, s.start + project.zoom.transitionMs) : null;
             if (out !== null) seek(out);
           }}
         />
       </div>
 
-      <div className={cx("shrink-0", cursorEvents.length && project.annotations.length ? "h-80" : cursorEvents.length || project.annotations.length ? "h-72" : "h-60")}>
+      <div className={cx("shrink-0", camera && project.annotations.length ? "h-80" : camera || project.annotations.length ? "h-72" : "h-60")}>
         <Timeline
           clips={project.clips}
           timeMs={snap.timeMs}
@@ -771,7 +681,6 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           waveform={hasAudio ? waveform : null}
           hasAudio={hasAudio}
           hasCamera={!!camera}
-          webcamVisible={project.webcam.visible}
           selectedId={selectedId}
           onSelect={setSelectedId}
           onSeek={seek}
@@ -781,7 +690,8 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           onSplit={split}
           onDelete={del}
           canDelete={project.clips.length > 1 && !!selectedId}
-          clickTimes={cursorEvents.length ? clickTimes : null}
+          scenes={camera ? (project.scenes ?? []) : null}
+          onSelectScenes={() => setTool("layout")}
           zoom={{ segments: project.zoom.segments, transitionMs: project.zoom.transitionMs, sourceDurationMs: project.sourceDurationMs }}
           selectedZoomId={selectedZoomId}
           onSelectZoom={(zid) => {
@@ -811,7 +721,6 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
           hasAudio={hasAudio}
           srcW={srcSize.w || meta.screen.width}
           srcH={srcSize.h || meta.screen.height}
-          cursor={cursor}
           backgroundImage={bgImage?.bitmap ?? null}
           overlayImages={overlays}
           audioFiles={audioBlobs}
@@ -822,59 +731,8 @@ function Workspace({ meta, screen, camera, project: initial, cursorEvents: store
   );
 }
 
-/** New projects: automatic zoom is on when the recording has cursor data. */
-function initialProject(meta: RecordingMeta, events: CursorEvent[]): EditProject {
+/** New projects start framed: a wallpaper, some padding, rounded corners and a shadow. */
+function initialProject(meta: RecordingMeta): EditProject {
   const created = createProject(meta);
-  // New projects start polished: a wallpaper, some padding, rounded corners and a shadow.
-  const p: EditProject = { ...created, background: "aurora", padding: 0.05, radius: 0.022, shadow: true };
-  // Automatic zoom is on by default; segments appear once cursor data or screen activity is available.
-  const base: ZoomSettings = { ...DEFAULT_ZOOM, auto: true, segments: markerSegments(meta.zoomMarkers ?? [], p.sourceDurationMs) };
-  return { ...p, zoom: events.length ? withAutoSegments(base, events, p.sourceDurationMs) : base };
-}
-
-/** Shown after a recording: the video is already edited (zooms, framing) and ready to export. */
-function ReadyBanner(p: {
-  analysing: boolean;
-  progress: number;
-  zooms: number;
-  clickBased: boolean;
-  canExport: boolean;
-  onExport: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-line bg-primary-surface px-4 py-2.5 text-sm" role="status" data-testid="ready-banner">
-      {p.analysing ? (
-        <>
-          <LoaderCircle className="size-4 animate-spin text-primary" />
-          <span>
-            <b>Getting your video ready…</b> finding your cursor and clicks ({Math.round(p.progress * 100)}%). You can already play and edit.
-          </span>
-        </>
-      ) : (
-        <>
-          <Sparkles className="size-4 text-primary" />
-          <span>
-            <b>Your video is ready.</b>{" "}
-            {p.zooms > 0
-              ? `${p.zooms} zoom${p.zooms === 1 ? "" : "s"} added ${p.clickBased ? "around your clicks" : "where the action is"}`
-              : "No clicks needed zooming"}
-            , with a background, rounded corners and a shadow. Export it now or fine-tune anything.
-          </span>
-          <Button size="sm" className="ml-auto" onClick={p.onExport} disabled={!p.canExport}>
-            <Upload className="size-4" /> Export video
-          </Button>
-        </>
-      )}
-      <button type="button" onClick={p.onClose} aria-label="Dismiss" className={cx("grid size-7 place-items-center rounded-chip text-muted hover:bg-white", p.analysing && "ml-auto")}>
-        <X className="size-4" />
-      </button>
-    </div>
-  );
-}
-
-/** Older projects: re-detect automatic zooms with the current rules (manual and dismissed zooms are kept). */
-function refreshAutoZooms(p: EditProject, events: CursorEvent[]): EditProject {
-  if (!p.zoom.auto || !events.length) return p;
-  return { ...p, zoom: withAutoSegments(p.zoom, events, p.sourceDurationMs) };
+  return { ...created, background: "aurora", padding: 0.05, radius: 0.022, shadow: true };
 }

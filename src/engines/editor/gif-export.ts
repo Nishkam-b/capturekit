@@ -1,4 +1,4 @@
-import { cursorStateAt } from "../cursor/path";
+import { usesCameraScene } from "./project";
 import { zoomAt } from "../zoom/camera";
 import { loadVideo, seekAll, type ExportOptions, type ExportProgress, type ExportResult } from "./export";
 import { GifEncoder } from "./gif";
@@ -10,7 +10,7 @@ export const GIF_SIZES = { small: 480, medium: 720, large: 1080 } as const;
 export type GifSize = keyof typeof GIF_SIZES;
 export const GIF_FPS = [10, 15, 20] as const;
 
-export interface GifExportOptions extends Pick<ExportOptions, "project" | "screen" | "camera" | "cursor" | "backgroundImage" | "overlayImages"> {
+export interface GifExportOptions extends Pick<ExportOptions, "project" | "screen" | "camera" | "backgroundImage" | "overlayImages"> {
   size: GifSize;
   fps: number;
   loop: boolean;
@@ -41,7 +41,7 @@ export async function exportGif(opts: GifExportOptions, onProgress: (p: ExportPr
   try {
     onProgress({ status: "preparing", fraction: 0 });
     const screen = await loadVideo(opts.screen, cleanups, true);
-    const camera = opts.camera && project.webcam.visible ? await loadVideo(opts.camera, cleanups, true) : null;
+    const camera = opts.camera && (project.webcam.visible || usesCameraScene(project)) ? await loadVideo(opts.camera, cleanups, true) : null;
     throwIfAborted();
     const { w, h } = gifSize(project, screen.videoWidth, screen.videoHeight, opts.size);
     const layout = frameLayout(project, screen.videoWidth, screen.videoHeight, w, h, !!camera);
@@ -54,7 +54,6 @@ export async function exportGif(opts: GifExportOptions, onProgress: (p: ExportPr
     const total = totalDuration(project.clips);
     const step = 1000 / opts.fps;
     const gif = new GifEncoder({ width: w, height: h, loop: opts.loop });
-    const cur = opts.cursor ?? null;
     let waitingForTab = false;
     for (let t = 0; t < total; t += step) {
       throwIfAborted();
@@ -74,8 +73,7 @@ export async function exportGif(opts: GifExportOptions, onProgress: (p: ExportPr
         layout,
         screen,
         camera,
-        cur?.path ? cursorStateAt(cur.path, src + project.cursor.offsetMs, cur.pressed) : null,
-        project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, src, cur?.follow ?? null) : null,
+        project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, src) : null,
         src,
         { backgroundImage: opts.backgroundImage ?? null, overlays: opts.overlayImages },
       );

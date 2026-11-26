@@ -50,10 +50,3 @@ Permissions-Policy: geolocation=(), payment=(), usb=()
 ```
 
 Don't block `camera`, `microphone` or `display-capture`: the app needs them.
-
-## Cursor extension and your domain
-
-The extension only talks to allow-listed CaptureKit origins. Add your production origin to `APP_ORIGINS` in
-`extension/content.js` (for example `/^https:\/\/capturekit\.example\.com$/`), bump the version in
-`extension/manifest.json`, and distribute that build (Chrome Web Store, or "Load unpacked").
-Don't use a broad pattern such as `*.github.io`: any page on that domain could then use the bridge.

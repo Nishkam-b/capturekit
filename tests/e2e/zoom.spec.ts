@@ -39,24 +39,15 @@ async function seekFraction(page: Page, f: number) {
   await page.waitForTimeout(600);
 }
 
-test("manual zoom without cursor data: add, render, pick focus, resize, undo, export", async ({ page }) => {
+test("manual zoom: add, render, amount and position sliders, pick focus, resize, undo, export", async ({ page }) => {
   await record(page, { source: "Entire screen", mic: false, camera: false, systemAudio: false });
   await page.getByRole("link", { name: /Edit & export/ }).click();
   await expect(page.getByTestId("clip-0")).toBeVisible();
 
-  // No cursor data: the editor analyses the video itself for automatic zoom.
+  // No automatic zooms: a new edit has none.
   await page.getByRole("button", { name: "Zoom", exact: true }).click();
-  await expect(page.getByTestId("activity-analysis")).toHaveCount(0, { timeout: 60_000 });
-  const autoSwitch = page.getByRole("switch", { name: "Auto zoom" });
-  // Real screen captures include the OS pointer, which the editor may find in the video.
-  const cursorFound = (await page.getByText(/Based on your cursor/).count()) > 0;
-  if (await autoSwitch.count()) {
-    if (!cursorFound) await expect(page.getByText("Based on screen activity (estimated)", { exact: false })).toBeVisible();
-    // This test is about manual zooms: turn automatic ones off.
-    if ((await autoSwitch.getAttribute("aria-checked")) === "true") await autoSwitch.click();
-  } else {
-    await expect(page.getByText(/No on-screen activity was found/)).toBeVisible();
-  }
+  await expect(page.getByTestId("zoom-0")).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Auto zoom" })).toHaveCount(0);
 
   // Frame at a moment that will be inside the zoom, before adding it.
   await seekFraction(page, 0.4);
@@ -67,8 +58,7 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await waitSaved(page);
   let z = (await storedZoom(page))!;
   expect(z.segments).toHaveLength(1);
-  // Manual zooms hold a steady view (on the cursor's spot when it's known).
-  expect(z.segments[0]).toMatchObject({ level: 2, mode: "fixed", auto: false });
+  expect(z.segments[0]).toMatchObject({ level: 2, x: 0.5, y: 0.5 });
   const seg = z.segments[0];
   expect(seg.end - seg.start).toBeGreaterThan(1000);
 
@@ -77,17 +67,26 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   const zoomed = await frame(page);
   expect(zoomed).not.toBe(before);
 
-  // Pick a focus point in the top-left of the preview (fixed-point zooms only).
+  // Amount and position sliders.
+  await page.getByLabel("Zoom amount").fill("3.25");
+  await page.getByLabel("Horizontal position").fill("0.7");
+  await page.getByLabel("Vertical position").fill("0.35");
+  await waitSaved(page);
+  z = (await storedZoom(page))!;
+  expect(z.segments[0]).toMatchObject({ level: 3.25, x: 0.7, y: 0.35 });
+  await seekFraction(page, 0.4);
+  expect(await frame(page)).not.toBe(zoomed);
+
+  // Or click the preview to centre the zoom there.
   const canvas = (await page.getByTestId("editor-canvas").boundingBox())!;
-  await expect(page.getByText(/Click the preview to choose where to zoom/)).toBeVisible();
+  await expect(page.getByText(/click the preview to centre the zoom/i)).toBeVisible();
   await page.mouse.click(canvas.x + canvas.width * 0.2, canvas.y + canvas.height * 0.25);
   await waitSaved(page);
   z = (await storedZoom(page))!;
   expect(z.segments[0].x).toBeCloseTo(0.2, 1);
   expect(z.segments[0].y).toBeCloseTo(0.25, 1);
 
-  // Change level and drag the end handle to make it longer.
-  await page.getByRole("radio", { name: "Zoom level: 3×", exact: true }).click();
+  // Drag the end handle to make it longer.
   const end = page.getByTestId("zoom-end-0");
   const eb = (await end.boundingBox())!;
   await page.mouse.move(eb.x + eb.width / 2, eb.y + eb.height / 2);
@@ -96,7 +95,7 @@ test("manual zoom without cursor data: add, render, pick focus, resize, undo, ex
   await page.mouse.up();
   await waitSaved(page);
   const z2 = (await storedZoom(page))!;
-  expect(z2.segments[0].level).toBe(3);
+  expect(z2.segments[0].level).toBe(3.25);
   expect(z2.segments[0].end).toBeGreaterThan(seg.end + 300);
 
   // Delete (Delete key with the Zoom tool) and undo.

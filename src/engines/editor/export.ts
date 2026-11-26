@@ -1,9 +1,8 @@
-import { cursorStateAt, type CursorBundle } from "../cursor/path";
 import { videoBitrateFor } from "../recorder/mime";
 import { zoomAt } from "../zoom/camera";
 import { patchWebmHead } from "../recorder/webm";
 import { drawFrame, frameLayout, outputSize, type BackgroundImage, type ResolutionPreset } from "./layout";
-import type { EditProject } from "./project";
+import { usesCameraScene, type EditProject } from "./project";
 import { clipDuration, clipSpeed, totalDuration } from "./timeline";
 import { AudioTrackPlayer } from "./audio-tracks";
 
@@ -32,8 +31,6 @@ export interface ExportOptions {
   format: ExportFormat;
   resolution: ResolutionPreset;
   fps?: number;
-  /** Cursor telemetry, if the recording has it. */
-  cursor?: CursorBundle | null;
   /** Uploaded background image, if the project uses one. */
   backgroundImage?: BackgroundImage | null;
   /** Decoded images for image annotations. */
@@ -100,7 +97,7 @@ export async function exportVideo(
   try {
     onProgress({ status: "preparing", fraction: 0 });
     const screen = await loadVideo(opts.screen, cleanups, false);
-    const camera = opts.camera && project.webcam.visible ? await loadVideo(opts.camera, cleanups, true) : null;
+    const camera = opts.camera && (project.webcam.visible || usesCameraScene(project)) ? await loadVideo(opts.camera, cleanups, true) : null;
     throwIfAborted();
 
     const srcW = screen.videoWidth;
@@ -169,7 +166,6 @@ export async function exportVideo(
     const stopped = new Promise<void>((r) => recorder.addEventListener("stop", () => r(), { once: true }));
     cleanups.push(() => recorder.state !== "inactive" && recorder.stop());
 
-    const cur = opts.cursor ?? null;
     const draw = () =>
       drawFrame(
         ctx,
@@ -177,8 +173,7 @@ export async function exportVideo(
         layout,
         screen,
         camera,
-        cur?.path ? cursorStateAt(cur.path, screen.currentTime * 1000 + project.cursor.offsetMs, cur.pressed) : null,
-        project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, screen.currentTime * 1000, cur?.follow ?? null) : null,
+        project.zoom.segments.length ? zoomAt(project.zoom.segments, project.zoom.transitionMs, screen.currentTime * 1000) : null,
         screen.currentTime * 1000,
         { backgroundImage: opts.backgroundImage ?? null, overlays: opts.overlayImages },
       );

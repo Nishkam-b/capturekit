@@ -1,7 +1,7 @@
 import { thumbnailFromVideo } from "@/engines/recorder/frames";
 import { createId } from "@/engines/shared/format";
 import type { RecordingMeta } from "@/engines/shared/types";
-import { getCursorTrack, getMedia, getProject, getRecording, saveCursorTrack, saveProject, saveRecording, type MediaKind } from "@/engines/storage/db";
+import { getMedia, getProject, getRecording, saveProject, saveRecording, type MediaKind } from "@/engines/storage/db";
 import { PROJECT_FILE_EXT, packProjectFile, unpackProjectFile } from "@/engines/storage/project-file";
 
 /** Reads a video file's size, duration and whether it has sound. Rejects files the browser can't play. */
@@ -82,7 +82,7 @@ export async function exportProjectFile(recordingId: string): Promise<{ blob: Bl
     const b = await getMedia(recordingId, k);
     if (b) media[k] = b;
   }
-  const blob = packProjectFile({ meta, project, cursor: await getCursorTrack(recordingId), media });
+  const blob = packProjectFile({ meta, project, media });
   const stem = meta.name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "capturekit";
   return { blob, filename: `${stem}${PROJECT_FILE_EXT}` };
 }
@@ -95,7 +95,6 @@ export async function importProjectFile(file: Blob): Promise<string> {
   const meta: RecordingMeta = { ...c.meta, id, createdAt: Date.now() };
   await saveRecording(meta, c.media as Partial<Record<MediaKind, Blob>>);
   if (c.project) await saveProject({ ...c.project, recordingId: id });
-  if (c.cursor) await saveCursorTrack({ ...c.cursor, recordingId: id });
   return id;
 }
 

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { DocPage } from "@/components/doc-page";
 import { site } from "@/config/site";
 
@@ -39,16 +38,6 @@ export default function PrivacyPage() {
           Screen sharing is asked for every time you start a recording, and you pick exactly what to share. The microphone
           and camera are only requested when you turn them on. You can revoke these at any time in your browser&apos;s site
           settings.
-        </p>
-      </section>
-
-      <section>
-        <h2>The optional browser extension</h2>
-        <p>
-          The CaptureKit Cursor Tracker extension stays idle until you start a tab recording. It then reports pointer
-          positions and clicks in the shared tab to your CaptureKit tab only. It never sends anything over the network and
-          stores nothing except which tab is being recorded (so a long recording survives the browser restarting the
-          extension). See <Link href="/help#cursor-extension">how it works</Link>.
         </p>
       </section>
 

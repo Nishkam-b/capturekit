@@ -1,9 +1,7 @@
-import type { CursorState } from "../cursor/path";
-import { drawCursor, type PointMapper } from "../cursor/render";
 import { drawAnnotations } from "../annotations/render";
 import { zoomRect } from "../zoom/camera";
 import type { ZoomCamera } from "../zoom/types";
-import { ASPECT_RATIOS, BG_BLURRED, BG_IMAGE, backgroundById, type BackgroundPreset, type EditProject, type NormRect } from "./project";
+import { ASPECT_RATIOS, BG_BLURRED, BG_IMAGE, DEFAULT_SCREEN, backgroundById, sceneAt, type BackgroundPreset, type EditProject, type NormRect } from "./project";
 import { webcamBox, webcamRadius, zoomedWebcamBox, type WebcamStyle } from "./webcam";
 
 export interface Rect {
@@ -60,7 +58,7 @@ export interface FrameLayout {
 
 /** Pure geometry: where everything goes on an output frame. */
 export function frameLayout(
-  project: Pick<EditProject, "crop" | "fit" | "padding" | "radius" | "webcam">,
+  project: Pick<EditProject, "crop" | "fit" | "padding" | "radius" | "webcam"> & Partial<Pick<EditProject, "screen">>,
   srcW: number,
   srcH: number,
   outW: number,
@@ -89,6 +87,14 @@ export function frameLayout(
     const h = crop.h * scale;
     src = crop;
     dst = { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
+  }
+  // Screen layer size and position.
+  const tr = { ...DEFAULT_SCREEN, ...project.screen };
+  if (tr.scale !== 1 || tr.x !== 0 || tr.y !== 0) {
+    const s = Math.min(1.5, Math.max(0.3, tr.scale));
+    const cx = dst.x + dst.w / 2 + tr.x * outW;
+    const cy = dst.y + dst.h / 2 + tr.y * outH;
+    dst = { x: cx - (dst.w * s) / 2, y: cy - (dst.h * s) / 2, w: dst.w * s, h: dst.h * s };
   }
 
   return {
@@ -119,7 +125,6 @@ export function drawFrame(
   layout: FrameLayout,
   screen: CanvasImageSource,
   camera: (CanvasImageSource & { videoWidth?: number; videoHeight?: number }) | null,
-  cursor: CursorState | null = null,
   zoom: ZoomCamera | null = null,
   /** Source time of this frame (ms), for timed annotations. */
   timeMs = 0,
@@ -134,6 +139,22 @@ export function drawFrame(
   drawBackground(ctx, project, out.w, out.h, screen, layout, backgroundImage);
 
   const short = Math.min(out.w, out.h);
+  const scene = sceneAt(project.scenes, timeMs);
+  const camReady = !!camera && (camera.videoWidth ?? 1) > 0;
+  if (scene === "camera" && camReady) {
+    drawFullCamera(ctx, project, out.w, out.h, camera!);
+    return;
+  }
+  const tr = { ...DEFAULT_SCREEN, ...project.screen };
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, Math.max(0, tr.opacity));
+  if (tr.rotation) {
+    const cx = dst.x + dst.w / 2;
+    const cy = dst.y + dst.h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((tr.rotation * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
   if (project.shadow) {
     ctx.save();
     ctx.shadowColor = "rgba(15, 23, 42, 0.35)";
@@ -156,17 +177,46 @@ export function drawFrame(
   if (project.annotations.length) {
     drawAnnotations(ctx, project.annotations, timeMs, view, screen, short, zoom?.scale ?? 1, assets.overlays);
   }
-  if (cursor) {
-    // Clipped to the video area (cursor never draws over the background).
-    // The cursor grows a little with zoom (not fully, so it stays tasteful).
-    drawCursor(ctx, cursor, project.cursor, sourcePointMapper(view), short * 0.032 * Math.sqrt(zoom?.scale ?? 1));
-  }
   ctx.restore();
+  ctx.restore(); // screen layer transform
 
-  if (cam && camera && (camera.videoWidth ?? 1) > 0) {
+  if (scene === "pip" && cam && camReady) {
     const box = project.webcam.shrinkOnZoom && zoom ? zoomedWebcamBox(cam, out.w, out.h, zoom.scale) : cam;
     drawWebcam(ctx, project.webcam, box, camera);
   }
+}
+
+/** Full-webcam layout: the camera fills the padded frame (rounded corners and mirror apply). */
+function drawFullCamera(ctx: Ctx, project: EditProject, w: number, h: number, camera: CanvasImageSource & { videoWidth?: number; videoHeight?: number }) {
+  const short = Math.min(w, h);
+  const pad = Math.round(short * Math.min(0.15, Math.max(0, project.padding)));
+  const box = { x: pad, y: pad, w: w - pad * 2, h: h - pad * 2 };
+  const r = Math.round(short * Math.min(0.06, Math.max(0, project.radius)));
+  const vw = camera.videoWidth ?? box.w;
+  const vh = camera.videoHeight ?? box.h;
+  const aspect = box.w / box.h;
+  const sw = Math.min(vw, vh * aspect);
+  const sh = sw / aspect;
+  ctx.save();
+  if (project.shadow) {
+    ctx.shadowColor = "rgba(15, 23, 42, 0.35)";
+    ctx.shadowBlur = short * 0.04;
+    ctx.shadowOffsetY = short * 0.01;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.roundRect(box.x, box.y, box.w, box.h, r);
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+  }
+  ctx.beginPath();
+  ctx.roundRect(box.x, box.y, box.w, box.h, r);
+  ctx.clip();
+  if (project.webcam.mirror) {
+    ctx.translate(box.x * 2 + box.w, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(camera, (vw - sw) / 2, (vh - sh) / 2, sw, sh, box.x, box.y, box.w, box.h);
+  ctx.restore();
 }
 
 export type BackgroundImage = CanvasImageSource & { width: number; height: number };
@@ -261,6 +311,15 @@ export function drawWebcam(
   const r = webcamRadius(style.shape, box, style.roundness);
   const border = style.border > 0 ? Math.max(1, Math.round(box.h * style.border)) : 0;
 
+  ctx.save(); // layer: opacity + rotation around the bubble's centre
+  ctx.globalAlpha = Math.min(1, Math.max(0, style.opacity ?? 1));
+  if (style.rotation) {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((style.rotation * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
   ctx.save();
   if (style.shadow) {
     ctx.shadowColor = "rgba(15, 23, 42, 0.35)";
@@ -287,17 +346,7 @@ export function drawWebcam(
   }
   ctx.drawImage(camera, (vw - sw) / 2, (vh - sh) / 2, sw, sh, inner.x, inner.y, inner.w, inner.h);
   ctx.restore();
-}
-
-/** Maps normalised source coordinates to output pixels through crop/fit/padding; null if cropped out. */
-export function sourcePointMapper(layout: FrameLayout): PointMapper {
-  const { src, dst, source } = layout;
-  return (nx, ny) => {
-    const sx = nx * source.w;
-    const sy = ny * source.h;
-    if (sx < src.x || sy < src.y || sx > src.x + src.w || sy > src.y + src.h) return null;
-    return { x: dst.x + ((sx - src.x) / src.w) * dst.w, y: dst.y + ((sy - src.y) / src.h) * dst.h };
-  };
+  ctx.restore(); // layer
 }
 
 /** Inverse of the (unzoomed) layout: output pixel → normalised source point, or null outside the video. */

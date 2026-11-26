@@ -26,18 +26,6 @@ While recording:
 - Recordings are saved **second by second**. If the tab closes or crashes, the dashboard offers to **recover** it.
 - If storage gets low, CaptureKit warns you and stops in time to save what you have.
 
-### Cursor tracking (optional)
-
-Browsers don't tell web pages where your cursor is, and tab recordings don't show it at all. Install the
-**CaptureKit Cursor Tracker** extension (see the [extension README](../extension/README.md)) and record a
-**Browser tab**. Cursor moves and clicks are then recorded for cursor effects and automatic zoom.
-
-### Zoom in here
-
-Press the zoom button in the recording controls (or **Alt+Shift+Z**) at a moment you want to highlight. Each press
-becomes a zoom in the editor that you can move, resize or delete. With the extension installed, the shortcut also
-works from any Chrome or Edge tab.
-
 ## 2. Edit a video
 
 Open a recording and press **Edit & export**. Everything is non-destructive and saves automatically.
@@ -46,10 +34,11 @@ Open a recording and press **Edit & export**. Everything is non-destructive and 
 |---|---|
 | Trim & cut | Drag clip edges to trim; **S** splits at the playhead; **Delete** removes a clip |
 | Crop & size | Drag the crop box; choose 16:9, 9:16, 1:1 or 4:5 with Fit or Fill |
-| Background | Colours and gradients, padding, rounded corners, shadow |
-| Webcam | Drag it anywhere on the preview, resize from its corner, shape, border, shadow, mirror |
-| Cursor | Draw the cursor, size, smoothing, highlight, click ripple, hide when still, timing |
-| Zoom | Automatic zoom around clicks (with cursor data) and manual zooms (**Z**) |
+| Screen | Size, position, opacity, rotation and corner curve of the screen recording |
+| Background | Colours, gradients, wallpapers, your own image or a blurred copy of the video; padding |
+| Webcam | Its own shape, size, position, opacity, rotation, corner curve, border, shadow, mirror (or drag it on the preview) |
+| Layout | Multicam: screen + webcam, full webcam or screen only, switched at the playhead (keys **1**, **2**, **3**) |
+| Zoom | Manual zooms (**Z**): amount and position sliders, or click the preview to centre it |
 | Annotations | Text, arrows, rectangles, circles, highlighter and **blur** for sensitive info |
 | Audio | Volume and mute |
 
@@ -58,13 +47,17 @@ Other shortcuts: **Space** play/pause, **←/→** step a frame (Shift: 1 second
 **Export** to WebM or MP4 (where your browser can encode MP4) at 1080p, 720p or the original size. Export runs
 in real time (a 5-minute video takes about 5 minutes) and pauses if you switch to another tab.
 
-### Automatic zoom
+### Zoom
 
-When you stop recording, the editor opens and finds your mouse pointer in the video ("Finding your cursor and
-clicks…"). A click is the cursor arriving somewhere, stopping, and the screen reacting next to it. Each zoom starts as
-you move toward the click, is fully in before you click, holds the view steady on that spot and zooms out afterwards; nearby clicks
-share one zoom. Record the **entire screen** or a **window** for this (browser-tab recordings don't contain the
-pointer, so zooms there follow on-screen changes). Turn it off in the Zoom panel or edit any zoom.
+Zooms are manual. Move the playhead, press **Z** (or **Zoom › Add zoom at playhead**), then set **Zoom amount**,
+**Horizontal position** and **Vertical position** with the sliders, or click the preview to centre it. Drag the zoom on
+the timeline to move it; drag its edges to change how long it lasts. Each zoom holds a steady view.
+
+### Layout (multicam)
+
+With a webcam recording, **Layout** switches what's on screen from the playhead onwards: **Screen + webcam**, **Full
+webcam** or **Screen only** (keys **1**, **2**, **3**). The Layout lane on the timeline shows each part; remove a switch
+from the list in the panel. Export follows the layout.
 
 ### Speed
 
@@ -74,8 +67,8 @@ In **Trim & cut**, select a clip (split first to speed up only part of the video
 
 - **Background:** colours, gradients, wallpapers, your own image (kept on this device), or a blurred copy of the video,
   with an optional blur.
-- **Webcam:** roundness, edge margin, and "Shrink while zoomed in" so it covers less of the action.
-- **Cursor** (extension recordings): dark, light or dot style, click bounce, motion blur and sway.
+- **Screen:** size, position, opacity, rotation and corner curve.
+- **Webcam:** shape, size, position, opacity, rotation, corner curve, edge margin, border, shadow and mirror.
 
 ### Images and music
 

@@ -23,39 +23,37 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Do I need to install anything?",
     a: (
       <>
-        No. Open the site in Chrome or Edge and press Record. When you stop, the editor opens with your video already
-        zoomed in on your clicks and framed, ready to export.
+        No. Open the site in Chrome or Edge and press Record. When you stop, the editor opens so you can trim, zoom, frame
+        and export.
       </>
     ),
   },
   {
-    q: "How does automatic zoom know where I clicked?",
+    q: "How do I zoom in?",
     a: (
       <>
-        Screen and window recordings include your mouse pointer, so after recording {site.name} finds the cursor in the
-        video on your device. A click is when the cursor arrives somewhere, stops, and the screen reacts right next to it
-        (a menu opens, a dialog appears, a page changes). Each zoom starts as you move toward the click, is fully in before
-        you click, holds the view steady on that spot, and zooms out when you&apos;re done. Clicks close together in the same area share one zoom. You can
-        move, resize, add or delete any zoom. Browser-tab recordings don&apos;t include the pointer, so there zooms follow
-        on-screen changes instead.
+        Zooms are manual. In the editor, move the playhead and press <b>Z</b> (or <b>Zoom › Add zoom at playhead</b>). Then
+        set the zoom amount and its horizontal and vertical position with sliders, or click the preview to centre it. Drag
+        the zoom on the timeline to move it or change how long it lasts. Each zoom holds a steady view.
       </>
     ),
   },
   {
-    q: "Can I choose where it zooms while recording?",
+    q: "Can I switch between the webcam and the screen, like a multicam edit?",
     a: (
       <>
-        Yes. Press the zoom button in the recording controls, or <b>Alt+Shift+Z</b> while the CaptureKit tab or its pop-out
-        controls are focused. Each mark becomes a zoom you can adjust in the editor.
+        Yes, if you recorded with the webcam on. In <b>Layout</b>, pick <b>Screen + webcam</b>, <b>Full webcam</b> or{" "}
+        <b>Screen only</b> at any point (or press 1, 2 or 3). The layout lane on the timeline shows each part, and the
+        export follows it.
       </>
     ),
   },
   {
-    q: "Why doesn't my cursor show in a tab recording?",
+    q: "Can I change the screen's and webcam's size, position and shape?",
     a: (
       <>
-        Browsers leave the pointer out of tab recordings. Choose <b>Entire screen</b> or <b>Window</b> instead (the
-        default): the pointer is recorded, and the editor uses it for click-based zoom and click effects.
+        Yes. <b>Screen</b> has size, position, opacity, rotation and corner curve. <b>Webcam</b> has its own shape (circle,
+        rounded, rectangle), size, position, opacity, rotation, corner curve, border, shadow and mirror.
       </>
     ),
   },

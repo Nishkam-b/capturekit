@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, Download, Eye, EyeOff, Mic, MousePointer2, Pencil, Scissors, Trash2, Volume2 } from "lucide-react";
+import { ArrowLeft, Camera, Check, Download, Eye, EyeOff, Mic, Pencil, Scissors, Trash2, Volume2 } from "lucide-react";
 import { extensionForMime, formatBytes, formatDuration, toFileStem } from "@/engines/shared/format";
 import type { RecordingMeta, ScreenshotMeta, WebcamLayout } from "@/engines/shared/types";
 import { deleteRecording, getRecording, updateRecordingMeta } from "@/engines/storage/db";
@@ -154,11 +154,6 @@ function RecordingDetail({
             {meta.audio.system && (
               <Badge tone="green">
                 <Volume2 className="size-3" /> System audio
-              </Badge>
-            )}
-            {meta.cursor && meta.cursor.events > 0 && (
-              <Badge tone="green">
-                <MousePointer2 className="size-3" /> Cursor data
               </Badge>
             )}
             {!meta.audio.mic && !meta.audio.system && <Badge>No audio</Badge>}

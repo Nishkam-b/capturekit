@@ -1,7 +1,7 @@
 # CaptureKit by Nishtek
 
 **A free, open-source screen recorder, video editor and screenshot editor that runs in your browser.**
-Record your screen with your webcam and voice, add smart zoom and cursor effects, annotate, and export.
+Record your screen with your webcam and voice, then edit it: trim, zoom, frame, switch between screen and webcam, annotate, and export.
 No account, no uploads, no subscription: everything stays on your device.
 
 **Try it:** [nishtek.in/capturekit](https://nishtek.in/capturekit/) (Chrome or Edge on a desktop computer)
@@ -18,7 +18,6 @@ No account, no uploads, no subscription: everything stays on your device.
 - Entire screen, an application window or a browser tab, with **webcam** (saved as its own track) and **microphone**
 - Tab audio and, on Windows/ChromeOS, system audio
 - Pause, resume, countdown, mic mute, screenshots while recording, keyboard shortcuts
-- **"Zoom in here"** button and Alt+Shift+Z while recording
 - Floating pop-out controls (Chrome/Edge)
 - **Crash-safe:** saved second by second, and interrupted recordings can be recovered
 - Storage checks: warns early, stops and saves before space runs out
@@ -28,13 +27,12 @@ No account, no uploads, no subscription: everything stays on your device.
 - **Speed regions:** play any clip from 0.5× to 4× (voices keep their pitch)
 - Crop; 16:9, 9:16, 1:1, 4:5; solid, gradient and **wallpaper** backgrounds, **your own image**, a **blurred copy
   of the video**, background blur, padding, rounded corners, shadow
-- Webcam overlay anywhere: circle / rounded / rectangle, roundness, margin, border, shadow, mirror, and it
-  **shrinks while zoomed in**
-- **Automatic zoom on your clicks, no setup:** the editor finds your mouse pointer in the screen recording, works out
-  where you clicked, and zooms in on each click area as you approach it, holds the view steady, and zooms out after. Plus manual zooms.
-- **Finished video right after recording:** the editor opens with zooms, background and framing applied, ready to export
-- **Cursor effects:** cursor (dark, light or dot), smoothing, highlight, click ripple, click bounce, motion blur,
-  sway (via the optional extension)
+- Webcam with its own shape (circle / rounded / rectangle), size, position, opacity, rotation, corner curve,
+  border, shadow and mirror
+- **Manual zoom with sliders:** add a zoom at the playhead and set its amount and position (or click the preview);
+  each zoom holds a steady view
+- **Screen layer:** size, position, opacity, rotation and corner curve
+- **Multicam layout:** switch between screen + webcam, full webcam and screen only anywhere on the timeline (keys 1–3)
 - **Annotations:** text, arrows, shapes, highlighter, **images** (logos, stickers) and **blur** for sensitive info
 - **Music & voice-over:** add audio files with start time, volume and repeat, mixed into the export
 - Export **WebM**, **MP4** (where the browser can encode it) or **GIF** (size, frame rate, loop)
@@ -67,19 +65,10 @@ No account, no uploads, no subscription: everything stays on your device.
 | Whole-screen system audio | Windows & ChromeOS | ❌ | ❌ |
 | Mic & webcam | ✅ | ✅ | ✅ |
 | Pop-out controls | ✅ | — | — |
-| Cursor extension | ✅ (116+) | — | — |
 | Video export | WebM & MP4 | WebM (untested) | MP4 (untested) |
 
 Mobile browsers can't record the screen, and no browser can capture audio from a single window.
 Automated tests run in Chrome and Edge; Firefox and Safari still need testing.
-
-### Cursor tracking extension (optional)
-
-Automatic zoom works without it. Browsers don't tell web pages where your cursor is, so for **browser-tab**
-recordings the small extension in [`extension/`](extension/README.md) records cursor moves and clicks, which powers
-a drawn cursor, click effects and zooms that follow the exact pointer, and makes Alt+Shift+Z work from any tab.
-Install it in three steps from the site's Help page (download, open `chrome://extensions` in developer mode, drag
-the folder in). A Chrome Web Store listing is prepared in [docs/EXTENSION_STORE.md](docs/EXTENSION_STORE.md).
 
 ## Run it locally
 

@@ -10,7 +10,6 @@ import {
   type ExportProgress,
   type ExportResult,
 } from "@/engines/editor/export";
-import type { CursorBundle } from "@/engines/cursor/path";
 import { outputSize, type BackgroundImage, type ResolutionPreset } from "@/engines/editor/layout";
 import { GIF_FPS, estimateGifBytes, exportGif, gifSize, type GifSize } from "@/engines/editor/gif-export";
 import type { EditProject } from "@/engines/editor/project";
@@ -26,7 +25,6 @@ interface Props {
   hasAudio: boolean;
   srcW: number;
   srcH: number;
-  cursor: CursorBundle | null;
   backgroundImage: BackgroundImage | null;
   overlayImages: ReadonlyMap<string, CanvasImageSource>;
   audioFiles: ReadonlyMap<string, Blob>;
@@ -42,7 +40,7 @@ const STATUS_TEXT: Record<ExportProgress["status"], string> = {
   finalizing: "Finishing file…",
 };
 
-export function ExportDialog({ project, name, screen, camera, hasAudio, srcW, srcH, cursor, backgroundImage, overlayImages, audioFiles, onClose }: Props) {
+export function ExportDialog({ project, name, screen, camera, hasAudio, srcW, srcH, backgroundImage, overlayImages, audioFiles, onClose }: Props) {
   const formats = useMemo(() => availableFormats(), []);
   const [format, setFormat] = useState<ExportFormat | "gif">(formats[0] ?? "webm");
   const [gifSizePreset, setGifSizePreset] = useState<GifSize>("medium");
@@ -107,8 +105,8 @@ export function ExportDialog({ project, name, screen, camera, hasAudio, srcW, sr
       const onProgress = (progress: ExportProgress) => setPhase((p) => (p.kind === "running" ? { ...p, progress } : p));
       const result =
         format === "gif"
-          ? await exportGif({ project, screen, camera, cursor, backgroundImage, overlayImages, size: gifSizePreset, fps: gifFps, loop: gifLoop }, onProgress, ctrl.signal)
-          : await exportVideo({ project, screen, camera, hasAudio, format, resolution, cursor, backgroundImage, overlayImages, audioFiles }, onProgress, ctrl.signal);
+          ? await exportGif({ project, screen, camera, backgroundImage, overlayImages, size: gifSizePreset, fps: gifFps, loop: gifLoop }, onProgress, ctrl.signal)
+          : await exportVideo({ project, screen, camera, hasAudio, format, resolution, backgroundImage, overlayImages, audioFiles }, onProgress, ctrl.signal);
       setPhase({ kind: "done", result, url: URL.createObjectURL(result.blob) });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") setPhase({ kind: "setup" });

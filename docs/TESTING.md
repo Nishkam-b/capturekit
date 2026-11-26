@@ -4,18 +4,14 @@
 
 | Command | What runs |
 |---|---|
-| `npm run test:unit` | Pure logic: timeline, layout, zoom detection/camera, cursor path, annotations, WebM header patch, screenshot layout, storage maths |
+| `npm run test:unit` | Pure logic: timeline, layout, zoom camera, layout and multicam scenes, annotations, WebM header patch, screenshot layout, storage maths |
 | `npm run build && npm run test:e2e` | Real recordings in headed **Chrome and Edge**: Chrome's fake camera/mic and fake-UI screen capture, through recording, saving, crash recovery, editing, zoom, annotations, screenshots, export (WebM/MP4/PNG/JPG/WebP file signatures) and privacy (CSP, no outside requests) |
-| `npm run test:extension` | The real unpacked cursor extension in Edge (branded Chrome ignores `--load-extension`) |
 | `npm run test:firefox` | Firefox smoke test (needs `npx playwright install firefox`) |
-| `npm test` | Unit + Chrome + Edge + extension |
+| `npm test` | Unit + Chrome + Edge |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and the build, then the Chrome browser tests
 under a virtual display on Linux. **The CI workflow hasn't run yet**; check its first run after pushing.
 
-**Known intermittent:** when the whole suite runs (Chrome, Edge and the extension browser at once), the extension
-test "records cursor moves and clicks…" failed once in about 12 runs. It passes reliably on its own (5/5). The likely
-cause is fake-UI capture picking up another open browser window. If it fails, rerun `npm run test:extension` on its own.
 
 On a busy Windows desktop, running Chrome and Edge e2e together has once ended with several tests failing with "Target page, context or browser has been closed" (the browser windows were closed mid-test, no assertion failed). The same specs passed when rerun per browser. Close other browser automation windows before a full run.
 
@@ -23,7 +19,7 @@ On a busy Windows desktop, running Chrome and Edge e2e together has once ended w
 
 - **Which source gets recorded.** With `--use-fake-ui-for-media-stream`, Chromium records a source of the
   requested *type* (for tabs, the requesting tab itself), not the one picked in a real dialog.
-- **Feel and quality.** Zoom smoothness, cursor sync, A/V sync on long videos, and whether a blur is truly unreadable.
+- **Feel and quality.** Zoom smoothness, A/V sync on long videos, and whether a blur is truly unreadable.
 - **Real hardware events.** Unplugging devices, a full disk, browser crashes, OS-level interruptions.
 - **Firefox/Safari.** Firefox couldn't be launched on the development machine; Safari needs a Mac.
 
@@ -45,13 +41,8 @@ Run in the latest Chrome **and** Edge on Windows, and on macOS if possible. Tick
 - [ ] Edit and export a 5+ minute recording; audio stays in sync at the end and around cuts
 - [ ] Exported MP4 plays in Windows Media Player / QuickTime and on a phone; uploads to a social app
 - [ ] Switch tabs during export → "Paused", then resumes correctly
-- [ ] Auto zoom on a real tutorial feels calm and lands before clicks
+- [ ] Manual zoom sliders and multicam layout switches look right in the exported video
 - [ ] Blur over a real email or password is unreadable in a 1080p export
-
-### Cursor extension
-- [ ] Load unpacked in Chrome; record a **different** tab; the cursor lines up in the editor
-- [ ] Navigate within the recorded tab mid-recording → tracking resumes
-- [ ] Leave the mouse still for a minute mid-recording → tracking continues
 
 ### Screenshots
 - [ ] Paste with Ctrl+V; drag-and-drop a file

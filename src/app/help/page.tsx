@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Camera, HardDrive, Mic, Monitor, MousePointer2, ShieldCheck } from "lucide-react";
+import { Camera, HardDrive, Mic, Monitor, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui";
-import { ExtensionInstall } from "@/components/extension-install";
 
 export const metadata: Metadata = { title: "Help" };
 
@@ -97,46 +96,22 @@ export default function HelpPage() {
           <li><kbd className="font-semibold text-ink">Alt+Shift+P</kbd> pause or resume</li>
           <li><kbd className="font-semibold text-ink">Alt+Shift+S</kbd> stop and save</li>
           <li><kbd className="font-semibold text-ink">Alt+Shift+C</kbd> take a screenshot</li>
-          <li><kbd className="font-semibold text-ink">Alt+Shift+Z</kbd> zoom in here (adds a zoom at this moment)</li>
         </ul>
         <p className="mt-2 text-xs text-muted">They work when the CaptureKit tab or its pop-out controls are focused. Web pages can&apos;t register system-wide shortcuts, so they don&apos;t work while another app is focused.</p>
       </section>
 
-      <section id="auto-zoom" className="scroll-mt-6">
-        <h2 className="mb-2 text-lg font-semibold">How automatic zoom works</h2>
+      <section id="editing" className="scroll-mt-6">
+        <h2 className="mb-2 text-lg font-semibold">Editing basics</h2>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted">
-          <li>Record your <b className="text-ink">entire screen</b> or a <b className="text-ink">window</b>: your mouse pointer is part of the video.</li>
-          <li>When you stop, the editor opens and finds the cursor in the video, on your device.</li>
+          <li><b className="text-ink">Zoom:</b> press Z (or Add zoom) at the playhead, then set the amount and position with sliders, or click the preview to centre it. Each zoom holds a steady view.</li>
+          <li><b className="text-ink">Screen:</b> size, position, opacity, rotation and corner curve of the screen recording.</li>
+          <li><b className="text-ink">Webcam:</b> its own shape, size, position, opacity, rotation and corner curve.</li>
           <li>
-            A <b className="text-ink">click</b> is the cursor arriving somewhere, stopping, and the screen reacting right next to it
-            (a menu, a dialog, a new page).
+            <b className="text-ink">Layout:</b> switch between screen + webcam, full webcam and screen only at any point, like a multicam edit
+            (keys 1, 2, 3 at the playhead).
           </li>
-          <li>Each zoom starts while you move toward the click, is fully in before you click, holds the view steady on that spot (it doesn&apos;t chase the cursor), and zooms out after.</li>
-          <li>Clicks close together share one zoom, so the video doesn&apos;t bounce in and out.</li>
-          <li>Browser-tab recordings have no pointer in the video, so zooms follow on-screen changes there.</li>
         </ul>
       </section>
-
-      <details id="cursor-extension" className="scroll-mt-6 rounded-card border border-line bg-white p-4">
-        <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-          <MousePointer2 className="size-4" /> Advanced: cursor for browser-tab recordings (optional extension)
-        </summary>
-        <p className="mt-3 text-sm text-muted">
-          Not needed for screen or window recordings. Only if you record a single <b className="text-ink">browser tab</b>
-          (which browsers record without the pointer), this small extension adds the pointer so the editor can draw a cursor
-          and zoom on clicks.
-        </p>
-        <ExtensionInstall />
-        <p className="mt-3 text-xs text-muted">
-          Chrome only installs extensions with one click from the Chrome Web Store; until CaptureKit is listed there, this is
-          the quickest way. Choose <b>Browser tab</b> when recording and the setup screen shows &quot;Extension connected&quot;.
-        </p>
-        <p className="mt-3 text-sm text-muted">
-          <b className="text-ink">Privacy:</b> the extension stays idle until you start a tab recording. It then reports only
-          pointer positions and clicks in the shared tab, only to this CaptureKit tab, and never over the network. Chrome and
-          Edge 116+. Pointer movement inside embedded cross-origin frames isn&apos;t seen.
-        </p>
-      </details>
     </div>
   );
 }

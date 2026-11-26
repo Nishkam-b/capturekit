@@ -92,7 +92,6 @@ test("webcam: drag to move, drag to resize, shape, border, mirror, export", asyn
   await settle(page);
   w = (await storedProject<{ webcam: Webcam }>(page)).webcam;
   expect(w).toMatchObject({ shape: "rect", mirror: true, border: 0, x: 1, y: 0 });
-  await expect(page.getByText(/Replacing or blurring the webcam background isn.t available yet/)).toBeVisible();
 
   // Undo returns to the previous corner.
   await page.getByRole("button", { name: "Undo" }).click();

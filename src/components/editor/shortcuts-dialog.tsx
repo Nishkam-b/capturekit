@@ -12,6 +12,7 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
       ["Shift + ← / →", "Jump one second"],
       ["S", "Split the clip at the playhead"],
       ["Z", "Add a zoom at the playhead"],
+      ["1 / 2 / 3", "Layout from the playhead: screen + webcam / full webcam / screen only"],
       ["Delete", "Delete the selected clip, zoom or annotation"],
       ["Ctrl + Z", "Undo"],
       ["Ctrl + Shift + Z / Ctrl + Y", "Redo"],
@@ -24,7 +25,6 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
       ["Alt + Shift + P", "Pause / resume"],
       ["Alt + Shift + S", "Stop and save"],
       ["Alt + Shift + C", "Take a screenshot"],
-      ["Alt + Shift + Z", "Zoom in here"],
     ],
   },
 ];
@@ -62,7 +62,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
             </dl>
           </section>
         ))}
-        <p className="mt-3 text-xs text-muted">On a Mac, use ⌘ instead of Ctrl. Recording shortcuts work when the CaptureKit tab or its pop-out controls are focused (or in any tab with the extension).</p>
+        <p className="mt-3 text-xs text-muted">On a Mac, use ⌘ instead of Ctrl. Recording shortcuts work when the CaptureKit tab or its pop-out controls are focused.</p>
       </div>
     </div>
   );

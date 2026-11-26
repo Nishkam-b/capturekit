@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, CameraOff, Mic, MicOff, Pause, Play, Square, Aperture, ZoomIn } from "lucide-react";
+import { Camera, CameraOff, Mic, MicOff, Pause, Play, Square, Aperture } from "lucide-react";
 import type { RecordingSession, SessionState } from "@/engines/recorder";
 import { formatDuration } from "@/engines/shared/format";
 import { cx } from "../ui";
@@ -34,9 +34,6 @@ export interface ControlsProps {
   onResume: () => void;
   onStop: () => void;
   onScreenshot: () => void;
-  /** Marks "zoom here" at the current moment. */
-  onZoomMarker: () => void;
-  zoomMarkers: number;
   onToggleMic: () => void;
   compact?: boolean;
 }
@@ -98,23 +95,6 @@ export function RecordingControls(p: ControlsProps) {
         )}
       </button>
 
-      <button
-        type="button"
-        className={cx(btn, "relative text-muted hover:bg-subtle hover:text-ink")}
-        onClick={p.onZoomMarker}
-        disabled={stopping || paused}
-        aria-label="Zoom in here"
-        title="Zoom in here: adds a zoom at this moment (Alt+Shift+Z)"
-        data-testid="zoom-marker"
-      >
-        <ZoomIn className="size-5" />
-        {p.zoomMarkers > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-primary text-[10px] font-bold text-white">
-            {p.zoomMarkers}
-          </span>
-        )}
-      </button>
-
       {p.hasMic && (
         <button
           type="button"
@@ -145,7 +125,7 @@ type DocumentPiP = { requestWindow(opts: { width: number; height: number }): Pro
 export async function openPipWindow(): Promise<Window | null> {
   const dpip = (window as unknown as { documentPictureInPicture?: DocumentPiP }).documentPictureInPicture;
   if (!dpip) return null;
-  const pip = await dpip.requestWindow({ width: 480, height: 72 });
+  const pip = await dpip.requestWindow({ width: 420, height: 72 });
   for (const sheet of Array.from(document.styleSheets)) {
     try {
       const style = pip.document.createElement("style");

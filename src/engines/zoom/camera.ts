@@ -1,4 +1,3 @@
-import { cursorStateAt, type CursorPath } from "../cursor/path";
 import type { ZoomCamera, ZoomSegment } from "./types";
 
 const IDENTITY: ZoomCamera = { scale: 1, cx: 0.5, cy: 0.5 };
@@ -19,10 +18,10 @@ export function segmentWeight(s: ZoomSegment, t: number, transitionMs: number): 
 }
 
 /**
- * Camera at source time t. Overlapping zooms blend continuously (scale = max,
- * centre = weighted). Follow segments track the smoothed cursor path when available.
+ * Camera at source time t. Each zoom holds a steady view on its centre; overlapping
+ * zooms blend continuously (scale = max, centre = weighted).
  */
-export function zoomAt(segments: readonly ZoomSegment[], transitionMs: number, t: number, follow: CursorPath | null): ZoomCamera {
+export function zoomAt(segments: readonly ZoomSegment[], transitionMs: number, t: number): ZoomCamera {
   let scale = 1;
   let wsum = 0;
   let cx = 0;
@@ -32,18 +31,9 @@ export function zoomAt(segments: readonly ZoomSegment[], transitionMs: number, t
     if (w <= 0) continue;
     const segScale = 1 + (s.level - 1) * w;
     scale = Math.max(scale, segScale);
-    let px = s.x;
-    let py = s.y;
-    if (s.mode === "follow" && follow) {
-      const st = cursorStateAt(follow, t);
-      if (st.x || st.y) {
-        px = st.x;
-        py = st.y;
-      }
-    }
     const k = segScale - 1;
-    cx += px * k;
-    cy += py * k;
+    cx += s.x * k;
+    cy += s.y * k;
     wsum += k;
   }
   if (scale <= 1.0001 || wsum === 0) return IDENTITY;

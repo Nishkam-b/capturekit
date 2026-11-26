@@ -68,7 +68,7 @@ export default function TermsPage() {
         <h2>6. Third-party services</h2>
         <p>
           The site is hosted on GitHub Pages, and links may take you to GitHub or Instagram. Those services have their own
-          terms. The optional browser extension is covered by these same terms.
+          terms.
         </p>
       </section>
 

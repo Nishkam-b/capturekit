@@ -1,7 +1,7 @@
 import { patchWebmHead, thumbnailFromVideo, type FrameImage, type SessionResult } from "@/engines/recorder";
 import { defaultRecordingName } from "@/engines/shared/format";
 import type { RecordingMeta, ScreenshotMeta, WebcamLayout } from "@/engines/shared/types";
-import { deleteRecording, getChunks, getCursorTrack, requestPersistentStorage, saveRecording, type MediaKind } from "@/engines/storage/db";
+import { deleteRecording, getChunks, requestPersistentStorage, saveRecording, type MediaKind } from "@/engines/storage/db";
 import { finalizeRecording, type PendingRecording, type StorageSink } from "@/engines/storage/recording-store";
 
 export interface CapturedScreenshot extends FrameImage {
@@ -19,11 +19,9 @@ export async function persistSession(opts: {
   webcam: WebcamLayout;
   /** Screenshots that couldn't be written during recording. */
   memoryShots: CapturedScreenshot[];
-  cursor?: RecordingMeta["cursor"];
-  zoomMarkers?: number[];
   startedAt: Date;
 }): Promise<string> {
-  const { id, result, sink, webcam, memoryShots, startedAt, cursor = null, zoomMarkers = [] } = opts;
+  const { id, result, sink, webcam, memoryShots, startedAt } = opts;
   await sink?.flush().catch(() => undefined);
   const thumb = await thumbnailFromVideo(result.screen.blob);
   const media: Partial<Record<MediaKind, Blob>> = {};
@@ -42,7 +40,6 @@ export async function persistSession(opts: {
     id,
     name: defaultRecordingName(startedAt),
     createdAt: startedAt.getTime(),
-    zoomMarkers: zoomMarkers.length ? zoomMarkers : undefined,
     durationMs: result.durationMs,
     size: result.screen.blob.size + (result.camera?.blob.size ?? 0) + shotBytes,
     screen: {
@@ -58,7 +55,6 @@ export async function persistSession(opts: {
     audio: { mic: result.hasMicAudio, system: result.hasSystemAudio },
     screenshots: shots,
     warnings: result.warnings,
-    cursor,
   };
 
   if (sink && result.stored) {
@@ -89,7 +85,6 @@ export async function recoverPending(p: PendingRecording): Promise<string> {
   const screenBlob = new Blob([heads.screen ?? screenParts[0], ...screenParts.slice(1)], { type: p.screen.mimeType });
   const cameraBlob = cameraParts.length ? new Blob([heads.camera ?? cameraParts[0], ...cameraParts.slice(1)], { type: p.camera?.mimeType }) : null;
   const thumb = await thumbnailFromVideo(screenBlob);
-  const cursorTrack = await getCursorTrack(p.id).catch(() => null);
 
   const meta: RecordingMeta = {
     schemaVersion: 1,
@@ -106,7 +101,6 @@ export async function recoverPending(p: PendingRecording): Promise<string> {
     audio: p.audio,
     screenshots: p.screenshots,
     warnings: ["Recovered after the recording was interrupted. The last moment before the interruption may be missing."],
-    cursor: cursorTrack && cursorTrack.events.length ? { source: cursorTrack.source, events: cursorTrack.events.length / 4 } : null,
   };
   await finalizeRecording({ meta, heads, unstored: [], media: thumb ? { thumb: thumb.blob } : {} });
   return p.id;

@@ -1,4 +1,3 @@
-import { cursorStateAt, type CursorBundle } from "../cursor/path";
 import { zoomAt } from "../zoom/camera";
 import { drawFrame, frameLayout, outputSize, outputToSource, type BackgroundImage, type FrameAssets, type FrameLayout } from "./layout";
 import { FULL_CROP, type EditProject } from "./project";
@@ -29,7 +28,6 @@ export class PreviewPlayer {
   private snapshot: PlayerSnapshot;
   private listeners = new Set<() => void>();
   private destroyed = false;
-  private cursor: CursorBundle | null = null;
 
   constructor(
     private readonly screen: HTMLVideoElement,
@@ -102,11 +100,6 @@ export class PreviewPlayer {
     if (!this._playing) this.draw();
   }
 
-  /** Cursor telemetry for this recording (null = none). */
-  setCursor(cursor: CursorBundle | null) {
-    this.cursor = cursor;
-    if (!this._playing) this.draw();
-  }
 
   setMode(mode: PreviewMode) {
     if (this.mode === mode) return;
@@ -228,13 +221,11 @@ export class PreviewPlayer {
       this.ctx.drawImage(this.screen, 0, 0, this.canvas.width, this.canvas.height);
       return;
     }
-    const c = this.cursor;
     const srcMs = this.screen.currentTime * 1000;
-    const state = c?.path ? cursorStateAt(c.path, srcMs + this.project.cursor.offsetMs, c.pressed) : null;
     const z = this.project.zoom;
     // Zoom is paused while editing annotations, so their on-screen positions hold still.
-    const cam = z.segments.length && this.mode === "edit" ? zoomAt(z.segments, z.transitionMs, srcMs, c?.follow ?? null) : null;
-    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, state, cam, srcMs, this.assets);
+    const cam = z.segments.length && this.mode === "edit" ? zoomAt(z.segments, z.transitionMs, srcMs) : null;
+    drawFrame(this.ctx, this.project, this.layout, this.screen, this.camera, cam, srcMs, this.assets);
   }
 
   private loop = () => {

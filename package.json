@@ -1,19 +1,17 @@
 {
   "name": "capturekit",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/build-extension.mjs",
     "dev": "next dev",
-    "build": "node scripts/build-extension.mjs && next build && node scripts/fix-export.mjs",
+    "build": "next build && node scripts/fix-export.mjs",
     "start": "node scripts/serve.mjs --port 3000",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:unit": "playwright test --config=playwright.unit.config.ts",
     "test:e2e": "playwright test --project=e2e --project=e2e-edge",
-    "test": "playwright test --project=unit --project=e2e --project=e2e-edge --project=e2e-extension",
-    "test:firefox": "playwright test --project=e2e-firefox",
-    "test:extension": "playwright test --project=e2e-extension"
+    "test": "playwright test --project=unit --project=e2e --project=e2e-edge",
+    "test:firefox": "playwright test --project=e2e-firefox"
   },
   "dependencies": {
     "lucide-react": "^1.79.0",
